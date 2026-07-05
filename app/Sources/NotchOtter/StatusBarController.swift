@@ -2,16 +2,19 @@ import AppKit
 import ServiceManagement
 
 /// Menu bar item: shows the same compact summary as the notch badge, plus a
-/// menu for showing/hiding the notch panel, toggling launch-at-login, and
-/// quitting the app.
+/// menu for showing/hiding the notch panel and the companion, toggling
+/// launch-at-login, and quitting the app.
 final class StatusBarController: NSObject, NSMenuDelegate {
     private let statusItem: NSStatusItem
     private weak var notchPanelController: NotchPanelController?
+    private weak var companionPanelController: CompanionPanelController?
     private let launchAtLoginItem = NSMenuItem(title: "Launch at Login", action: nil, keyEquivalent: "")
     private let showHideItem = NSMenuItem(title: "Show/Hide Panel", action: nil, keyEquivalent: "")
+    private let showHideCompanionItem = NSMenuItem(title: "Show/Hide Companion", action: nil, keyEquivalent: "")
 
-    init(notchPanelController: NotchPanelController) {
+    init(notchPanelController: NotchPanelController, companionPanelController: CompanionPanelController) {
         self.notchPanelController = notchPanelController
+        self.companionPanelController = companionPanelController
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         super.init()
         statusItem.button?.title = "\u{1F9A6}" // otter emoji as a stable fallback icon
@@ -32,6 +35,10 @@ final class StatusBarController: NSObject, NSMenuDelegate {
         showHideItem.action = #selector(toggleShowHidePanel)
         menu.addItem(showHideItem)
 
+        showHideCompanionItem.target = self
+        showHideCompanionItem.action = #selector(toggleShowHideCompanion)
+        menu.addItem(showHideCompanionItem)
+
         launchAtLoginItem.target = self
         launchAtLoginItem.action = #selector(toggleLaunchAtLogin(_:))
         launchAtLoginItem.state = currentLaunchAtLoginState
@@ -46,14 +53,19 @@ final class StatusBarController: NSObject, NSMenuDelegate {
         return menu
     }
 
-    /// Keeps the checkmark in sync even when visibility changed elsewhere
-    /// (e.g. the otter's own right-click "Hide Otter" item).
+    /// Keeps both checkmarks in sync even when visibility changed elsewhere
+    /// (e.g. the otter's own right-click "Hide Otter"/"Hide Companion" items).
     func menuWillOpen(_ menu: NSMenu) {
         showHideItem.state = (notchPanelController?.isManuallyHidden ?? false) ? .off : .on
+        showHideCompanionItem.state = (companionPanelController?.isManuallyHidden ?? false) ? .off : .on
     }
 
     @objc private func toggleShowHidePanel() {
         notchPanelController?.toggleManualVisibility()
+    }
+
+    @objc private func toggleShowHideCompanion() {
+        companionPanelController?.toggleManualVisibility()
     }
 
     private var currentLaunchAtLoginState: NSControl.StateValue {

@@ -6,6 +6,7 @@ import AppKit
 /// policy is set here too as a belt-and-suspenders match.
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var notchPanelController: NotchPanelController!
+    private var companionPanelController: CompanionPanelController!
     private var dropdownController: DropdownPanelController!
     private var statusBarController: StatusBarController!
 
@@ -16,11 +17,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.setActivationPolicy(.accessory)
 
         notchPanelController = NotchPanelController()
+        companionPanelController = CompanionPanelController()
         dropdownController = DropdownPanelController()
-        statusBarController = StatusBarController(notchPanelController: notchPanelController)
+        statusBarController = StatusBarController(
+            notchPanelController: notchPanelController,
+            companionPanelController: companionPanelController
+        )
 
         notchPanelController.onToggleDropdown = { [weak self] in
-            self?.toggleDropdown()
+            guard let self else { return }
+            self.toggleDropdown(anchor: self.notchPanelController.bottomAnchorPoint)
+        }
+        companionPanelController.onToggleDropdown = { [weak self] in
+            guard let self else { return }
+            self.toggleDropdown(anchor: self.companionPanelController.bottomAnchorPoint)
         }
 
         SessionStore.shared.start()
@@ -52,6 +62,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func refreshUI() {
         let store = SessionStore.shared
         notchPanelController.update(store: store)
+        companionPanelController.update(store: store)
         statusBarController.updateSummary(store.summaryText)
         dropdownController.refreshIfVisible(
             store: store,
@@ -60,11 +71,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
     }
 
-    private func toggleDropdown() {
+    /// Shared by both the notch otter and the companion otter -- each passes
+    /// its own anchor point, but they toggle the same underlying dropdown.
+    private func toggleDropdown(anchor: NSPoint) {
         let store = SessionStore.shared
         dropdownController.toggle(
             store: store,
-            below: notchPanelController.bottomAnchorPoint,
+            below: anchor,
             onRowClick: { [weak self] record in self?.focusSession(record) },
             onOutputsClick: { [weak self] record in self?.openOutputs(for: record) }
         )
