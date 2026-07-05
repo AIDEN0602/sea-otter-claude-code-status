@@ -1,0 +1,4 @@
+dist/
+app/.build/
+.claude/
+.DS_Store
