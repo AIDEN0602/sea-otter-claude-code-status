@@ -4,14 +4,16 @@ import ServiceManagement
 /// Menu bar item: shows the same compact summary as the notch badge, plus a
 /// menu for showing/hiding the notch panel, toggling launch-at-login, and
 /// quitting the app.
-final class StatusBarController {
+final class StatusBarController: NSObject, NSMenuDelegate {
     private let statusItem: NSStatusItem
     private weak var notchPanelController: NotchPanelController?
     private let launchAtLoginItem = NSMenuItem(title: "Launch at Login", action: nil, keyEquivalent: "")
+    private let showHideItem = NSMenuItem(title: "Show/Hide Panel", action: nil, keyEquivalent: "")
 
     init(notchPanelController: NotchPanelController) {
         self.notchPanelController = notchPanelController
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        super.init()
         statusItem.button?.title = "\u{1F9A6}" // otter emoji as a stable fallback icon
         statusItem.menu = buildMenu()
     }
@@ -24,10 +26,11 @@ final class StatusBarController {
 
     private func buildMenu() -> NSMenu {
         let menu = NSMenu()
+        menu.delegate = self
 
-        let toggleItem = NSMenuItem(title: "Show/Hide Panel", action: #selector(toggleShowHidePanel), keyEquivalent: "")
-        toggleItem.target = self
-        menu.addItem(toggleItem)
+        showHideItem.target = self
+        showHideItem.action = #selector(toggleShowHidePanel)
+        menu.addItem(showHideItem)
 
         launchAtLoginItem.target = self
         launchAtLoginItem.action = #selector(toggleLaunchAtLogin(_:))
@@ -41,6 +44,12 @@ final class StatusBarController {
         menu.addItem(quitItem)
 
         return menu
+    }
+
+    /// Keeps the checkmark in sync even when visibility changed elsewhere
+    /// (e.g. the otter's own right-click "Hide Otter" item).
+    func menuWillOpen(_ menu: NSMenu) {
+        showHideItem.state = (notchPanelController?.isManuallyHidden ?? false) ? .off : .on
     }
 
     @objc private func toggleShowHidePanel() {

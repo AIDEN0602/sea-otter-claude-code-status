@@ -289,4 +289,16 @@ final class SessionStore {
     func record(forSessionID id: String) -> SessionRecord? {
         records[id]
     }
+
+    /// Count of visible sessions currently in `state`.
+    func count(of state: SessionState) -> Int {
+        visibleRecords.filter { $0.displayState == state }.count
+    }
+
+    /// Grouped counts for the compact notch badge (waiting_permission and
+    /// waiting_input collapsed into one "waiting" bucket, matching
+    /// `summaryText`'s grouping).
+    var compactCounts: (error: Int, waiting: Int, working: Int) {
+        (count(of: .error), count(of: .waitingPermission) + count(of: .waitingInput), count(of: .working))
+    }
 }
