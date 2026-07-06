@@ -11,6 +11,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusBarController: StatusBarController!
 
     private var storeObserver: NSObjectProtocol?
+    private var tabsPollObserver: NSObjectProtocol?
     private var screenObserver: NSObjectProtocol?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -35,9 +36,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         SessionStore.shared.start()
         NotificationManager.shared.start()
+        // App-wide, always-on (not tied to companion visibility): SessionStore
+        // needs fresh-ish Ghostty tab data at all times to decide which
+        // done/idle sessions are exempt from the age-based prune (a session
+        // matched to a still-open tab is never pruned by age).
+        GhosttyTabsPoller.shared.start()
 
         storeObserver = NotificationCenter.default.addObserver(
             forName: .sessionStoreDidUpdate,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.refreshUI()
+        }
+
+        tabsPollObserver = NotificationCenter.default.addObserver(
+            forName: .ghosttyTabsPollerDidUpdate,
             object: nil,
             queue: .main
         ) { [weak self] _ in
@@ -57,6 +71,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         SessionStore.shared.stop()
+        GhosttyTabsPoller.shared.stop()
     }
 
     private func refreshUI() {

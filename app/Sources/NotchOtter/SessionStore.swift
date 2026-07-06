@@ -229,15 +229,37 @@ final class SessionStore {
     }
 
     /// Records to actually show in the UI: hides `done`/`idle` sessions older
-    /// than the display-prune age, per SPEC.md section 4.
+    /// than the display-prune age, per SPEC.md section 4 -- EXCEPT a session
+    /// currently matched to a still-open Ghostty tab is never pruned by age;
+    /// it stays visible until its tab closes (SessionEnd deletes the file)
+    /// or the session goes stale via dead PID. When tab data is unavailable
+    /// (Automation permission missing, Ghostty not running, etc.),
+    /// `GhosttyTabMatcher` itself degrades to "everyone unmatched", so this
+    /// naturally falls back to the plain age-based prune for every session,
+    /// unchanged from before this exemption existed.
     var visibleRecords: [SessionRecord] {
-        allRecords.filter { record in
+        let matchedIDs = matchedToOpenTabSessionIDs
+        return allRecords.filter { record in
             let state = record.displayState
             if state == .done || state == .idle {
+                if matchedIDs.contains(record.session.sessionID) {
+                    return true
+                }
                 return record.ageSeconds < Self.displayPruneAge
             }
             return true
         }
+    }
+
+    /// Session IDs currently matched to an open Ghostty tab, per the same
+    /// matching algorithm the companion row uses (computed independently
+    /// here since SessionStore doesn't otherwise depend on the companion UI
+    /// layer) -- derived fresh from `GhosttyTabsPoller.shared.tabs` on each
+    /// access, so there's no separately-mutable cache to fall out of sync
+    /// with either the 2s tab poll or filesystem-driven session updates.
+    private var matchedToOpenTabSessionIDs: Set<String> {
+        let rows = GhosttyTabMatcher.buildRowOrder(sessions: allRecords, tabs: GhosttyTabsPoller.shared.tabs)
+        return Set(rows.compactMap { $0.matchedTab != nil ? $0.record.session.sessionID : nil })
     }
 
     /// The single highest-priority state across all visible sessions, used to

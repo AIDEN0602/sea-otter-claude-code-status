@@ -1,7 +1,15 @@
 import AppKit
 
+extension Notification.Name {
+    /// Posted on the main thread whenever `GhosttyTabsPoller.shared.tabs`
+    /// changes (including transitions to/from nil). Separate from
+    /// `.sessionStoreDidUpdate` since tab titles can change independently of
+    /// any session state change.
+    static let ghosttyTabsPollerDidUpdate = Notification.Name("NotchOtter.ghosttyTabsPollerDidUpdate")
+}
+
 /// One Ghostty tab's identity and live state, in on-screen tab order.
-struct GhosttyTabInfo {
+struct GhosttyTabInfo: Equatable {
     /// 1-based index into Ghostty's `windows` list (AppleScript ordinal).
     let windowIndex: Int
     /// 1-based index into that window's `tabs` list (AppleScript ordinal).
@@ -15,22 +23,29 @@ struct GhosttyTabInfo {
     let cwd: String
 }
 
-/// Polls Ghostty's own AppleScript dictionary every 2 seconds for the live
-/// list of open tabs (window index, tab index, title, cwd), in on-screen tab
-/// order, so the companion row can match sessions to tabs and show live tab
-/// titles. Degrades gracefully to `tabs = nil` on ANY failure (Automation
-/// permission not yet granted, Ghostty not running, AppleScript error) --
-/// callers must treat `nil` as "fall back to plain session-only behavior",
-/// never crash, and this never retries faster than the fixed 2s cadence.
+/// App-wide singleton that polls Ghostty's own AppleScript dictionary every
+/// 2 seconds for the live list of open tabs (window index, tab index, title,
+/// cwd), in on-screen tab order. Runs independently of whether the companion
+/// panel is currently visible -- `SessionStore.visibleRecords` also needs
+/// fresh-ish tab-match data to decide which done/idle sessions are exempt
+/// from the age-based prune (a session matched to a still-open tab is never
+/// pruned), and that decision has to be correct even while Ghostty isn't
+/// frontmost or the companion is hidden.
+///
+/// Degrades gracefully to `tabs = nil` on ANY failure (Ghostty not running,
+/// Automation permission not yet granted, AppleScript error) -- callers must
+/// treat `nil` as "fall back to plain session-only behavior", never crash,
+/// and this never retries faster than the fixed 2s cadence.
 final class GhosttyTabsPoller {
+    static let shared = GhosttyTabsPoller()
+
     private static let pollInterval: TimeInterval = 2.0
 
     private(set) var tabs: [GhosttyTabInfo]?
-    /// Called on the main thread whenever `tabs` is refreshed (successfully
-    /// or not) so observers can re-run matching/layout.
-    var onUpdate: (() -> Void)?
 
     private var timer: Timer?
+
+    private init() {}
 
     /// Starts (or no-ops if already running) polling every 2s, with an
     /// immediate first poll so callers don't wait a full interval for data.
@@ -50,13 +65,36 @@ final class GhosttyTabsPoller {
     }
 
     private func poll() {
+        // Checked BEFORE touching AppleScript: `tell application "Ghostty"`
+        // would otherwise silently LAUNCH Ghostty if it isn't running, which
+        // is never something a 2s background poll should do.
+        guard Self.isGhosttyRunning() else {
+            setTabs(nil)
+            return
+        }
         DispatchQueue.global(qos: .utility).async { [weak self] in
             let result = Self.runAppleScript()
             DispatchQueue.main.async {
-                guard let self else { return }
-                self.tabs = result
-                self.onUpdate?()
+                self?.setTabs(result)
             }
+        }
+    }
+
+    /// Only updates state (and notifies) when the tab list actually
+    /// changed, so a steady-state Ghostty (nothing opened/closed/retitled)
+    /// doesn't cause a `refreshUI()` every 2s for nothing.
+    private func setTabs(_ newTabs: [GhosttyTabInfo]?) {
+        guard newTabs != tabs else { return }
+        tabs = newTabs
+        NotificationCenter.default.post(name: .ghosttyTabsPollerDidUpdate, object: self)
+    }
+
+    private static func isGhosttyRunning() -> Bool {
+        NSWorkspace.shared.runningApplications.contains { app in
+            if let bundleID = app.bundleIdentifier, bundleID.localizedCaseInsensitiveContains("ghostty") {
+                return true
+            }
+            return app.localizedName == "Ghostty"
         }
     }
 
@@ -113,7 +151,7 @@ final class GhosttyTabsPoller {
         var errorDict: NSDictionary?
         let result = appleScript.executeAndReturnError(&errorDict)
         if let errorDict {
-            NSLog("NotchOtter: Ghostty tabs poll failed (Automation permission not granted yet, or Ghostty not running): \(errorDict)")
+            NSLog("NotchOtter: Ghostty tabs poll failed (Automation permission not granted yet, or AppleScript error): \(errorDict)")
             return nil
         }
         guard let raw = result.stringValue else { return nil }

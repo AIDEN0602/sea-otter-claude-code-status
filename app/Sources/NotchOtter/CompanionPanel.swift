@@ -226,7 +226,6 @@ final class CompanionPanelController {
 
     let panel: NSPanel
     private let contentView: CompanionContentView
-    private let tabsPoller = GhosttyTabsPoller()
 
     /// Currently-shown per-session unit views, keyed by session_id, reused
     /// across updates (rather than destroyed/recreated) so an otter whose
@@ -273,16 +272,17 @@ final class CompanionPanelController {
             self?.handleActivation(note)
         }
 
-        // Re-run matching/layout whenever fresh tab data arrives -- tab
-        // titles can change without any session-store notification firing.
-        tabsPoller.onUpdate = { [weak self] in
-            self?.update(store: SessionStore.shared)
-        }
+        // Tab data itself (GhosttyTabsPoller.shared) is a permanent app-wide
+        // singleton started once in AppDelegate, not owned or lifecycle-tied
+        // to this controller -- SessionStore.visibleRecords needs fresh-ish
+        // tab-match data at all times (even while the companion is hidden)
+        // to decide which done/idle sessions are exempt from the age prune.
+        // AppDelegate observes `.ghosttyTabsPollerDidUpdate` and calls
+        // `update(store:)` again from there, same as `.sessionStoreDidUpdate`.
     }
 
     deinit {
         pollTimer?.invalidate()
-        tabsPoller.stop()
         if let activationObserver {
             NSWorkspace.shared.notificationCenter.removeObserver(activationObserver)
         }
@@ -293,7 +293,7 @@ final class CompanionPanelController {
     /// duplicated state computation.
     func update(store: SessionStore) {
         let allVisible = store.visibleRecords
-        let fullOrder = GhosttyTabMatcher.buildRowOrder(sessions: allVisible, tabs: tabsPoller.tabs)
+        let fullOrder = GhosttyTabMatcher.buildRowOrder(sessions: allVisible, tabs: GhosttyTabsPoller.shared.tabs)
 
         // Cap at 5, prioritizing matched (tab-order) rows over unmatched
         // ones when there's overflow, since matched rows correspond to
@@ -426,13 +426,13 @@ final class CompanionPanelController {
         stopPolling()
     }
 
-    /// Starts both the reposition-follow timer and the Ghostty tabs poller
-    /// together -- the tabs poller only needs to run while the companion is
-    /// actually being shown (Ghostty frontmost with live sessions), so
-    /// tying its lifecycle to this existing timer avoids a separate
-    /// always-on background poll.
+    /// Starts the reposition-follow timer (window-move/resize tracking
+    /// while the companion is visible). `GhosttyTabsPoller.shared` is a
+    /// separate, permanently-running app-wide singleton (started once in
+    /// AppDelegate) -- not tied to this controller's own visibility, since
+    /// SessionStore needs fresh tab-match data even while the companion
+    /// itself is hidden.
     private func startPolling() {
-        tabsPoller.start()
         guard pollTimer == nil else { return }
         let timer = Timer(timeInterval: Self.pollInterval, repeats: true) { [weak self] _ in
             self?.repositionToGhosttyWindow()
@@ -444,7 +444,6 @@ final class CompanionPanelController {
     private func stopPolling() {
         pollTimer?.invalidate()
         pollTimer = nil
-        tabsPoller.stop()
     }
 
     // MARK: - Perch positioning
