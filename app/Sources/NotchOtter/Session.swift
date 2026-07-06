@@ -35,8 +35,17 @@ struct Session: Codable {
     let sessionID: String
     let state: SessionState
     let cwd: String
+    /// The `cwd` from the FIRST event that created the state file, frozen
+    /// forever after (per SPEC.md section 1) -- unlike `cwd`, which keeps
+    /// updating as Claude `cd`s around. This is what actually matches a
+    /// Ghostty tab's shell launch directory. Optional/tolerant since it's a
+    /// newer field: falls back to `cwd` via `groupingCwd` wherever it's used.
+    let launchCwd: String?
     let project: String
     let pid: Int32
+    /// The claude process's controlling tty (e.g. "ttys014"), optional --
+    /// absent on older session files or when the hook couldn't determine it.
+    let tty: String?
     let updatedAt: Date
     let lastEvent: String
     let errorCount: Int
@@ -46,8 +55,10 @@ struct Session: Codable {
         case sessionID = "session_id"
         case state
         case cwd
+        case launchCwd = "launch_cwd"
         case project
         case pid
+        case tty
         case updatedAt = "updated_at"
         case lastEvent = "last_event"
         case errorCount = "error_count"
@@ -68,6 +79,17 @@ struct Session: Codable {
         lastEvent = (try? container.decode(String.self, forKey: .lastEvent)) ?? ""
         errorCount = (try? container.decode(Int.self, forKey: .errorCount)) ?? 0
         outputs = (try? container.decode([String].self, forKey: .outputs)) ?? []
+
+        let decodedLaunchCwd = (try? container.decode(String.self, forKey: .launchCwd))
+        launchCwd = (decodedLaunchCwd?.isEmpty ?? true) ? nil : decodedLaunchCwd
+        let decodedTty = (try? container.decode(String.self, forKey: .tty))
+        tty = (decodedTty?.isEmpty ?? true) ? nil : decodedTty
+    }
+
+    /// The cwd to use for Ghostty tab matching: `launch_cwd` when present,
+    /// else `cwd` (per the matching algorithm in CompanionPanel.swift).
+    var groupingCwd: String {
+        launchCwd ?? cwd
     }
 
     private static func parseISO8601(_ raw: String) -> Date? {

@@ -41,9 +41,22 @@ fi
 # process itself (per SPEC.md: "hook runs as child of claude").
 ppid_val="${PPID:-0}"
 
+# tty is backfilled once per session, same as pid: only shell out to ps when
+# the existing state file doesn't already have a non-empty tty, so the
+# (relatively expensive) ps call happens at most once per session lifetime.
+existing_tty=$(printf '%s' "$existing_json" | "$JQ_BIN" -r '.tty // empty' 2>/dev/null)
+new_tty=""
+if [ -z "$existing_tty" ]; then
+  new_tty=$(ps -o tty= -p "$ppid_val" 2>/dev/null | tr -d ' ')
+  case "$new_tty" in
+    '??'|'?') new_tty="" ;;
+  esac
+fi
+
 merged=$(printf '%s' "$hook_json" | "$JQ_BIN" -c \
   --argjson existing "$existing_json" \
   --arg pid "$ppid_val" \
+  --arg new_tty "$new_tty" \
   '
   . as $in
   | ($in.hook_event_name // "") as $event
@@ -55,6 +68,12 @@ merged=$(printf '%s' "$hook_json" | "$JQ_BIN" -c \
   | (now | gmtime | strftime("%Y-%m-%dT%H:%M:%SZ")) as $ts
   | ($existing.error_count // 0) as $prev_err
   | ($existing.outputs // []) as $prev_outputs
+  # launch_cwd is captured once from the first event that creates the state
+  # file and never overwritten afterward, even as cwd itself keeps changing.
+  | (($existing.launch_cwd // "") ) as $prev_launch_cwd
+  | (if $prev_launch_cwd != "" then $prev_launch_cwd else $cwd end) as $launch_cwd
+  | (($existing.tty // "")) as $prev_tty
+  | (if $prev_tty != "" then $prev_tty else $new_tty end) as $tty_final
   | (
       if $event == "SessionStart" then
         {
@@ -101,7 +120,9 @@ merged=$(printf '%s' "$hook_json" | "$JQ_BIN" -c \
       * { session_id: $sid, cwd: $cwd, project: $project, updated_at: $ts, last_event: $event,
           # Sessions started before install never fire SessionStart, so capture
           # the claude pid on whatever event arrives first.
-          pid: (if (($existing.pid // 0) | tonumber? // 0) > 0 then $existing.pid else (($pid | tonumber?) // 0) end) }
+          pid: (if (($existing.pid // 0) | tonumber? // 0) > 0 then $existing.pid else (($pid | tonumber?) // 0) end),
+          launch_cwd: $launch_cwd }
+      * (if $tty_final != "" then { tty: $tty_final } else {} end)
       * $delta
     )
   ' 2>/dev/null)

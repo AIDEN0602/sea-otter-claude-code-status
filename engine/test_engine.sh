@@ -100,6 +100,29 @@ assert_eq "SessionStart -> outputs empty" "0" "$outputs_len"
 err_val=$(state_field "$STATE_FILE" '.error_count')
 assert_eq "SessionStart -> error_count 0" "0" "$err_val"
 
+launch_cwd_val=$(state_field "$STATE_FILE" '.launch_cwd')
+assert_eq "SessionStart -> launch_cwd set to initial cwd" "$FAKE_CWD" "$launch_cwd_val"
+
+expected_tty=$(ps -o tty= -p "$$" 2>/dev/null | tr -d ' ')
+case "$expected_tty" in
+  '??'|'?') expected_tty="" ;;
+esac
+tty_val=$(state_field "$STATE_FILE" '.tty // ""')
+assert_eq "SessionStart -> tty captured via ps -o tty= -p \$PPID" "$expected_tty" "$tty_val"
+
+# --- Simulate an internal cd: cwd should update, launch_cwd must NOT ---
+DIFFERENT_CWD="/tmp/fake-project-otter-test-after-cd"
+mkdir -p "$DIFFERENT_CWD"
+run_hook "$STATE_DIR" "$($JQ_BIN -n --arg sid "$SESSION_ID" --arg cwd "$DIFFERENT_CWD" \
+  '{session_id: $sid, cwd: $cwd, hook_event_name: "PreToolUse", tool_name: "Bash", tool_input: {command: "cd elsewhere"}}')"
+cwd_val=$(state_field "$STATE_FILE" '.cwd')
+launch_cwd_val=$(state_field "$STATE_FILE" '.launch_cwd')
+assert_eq "cwd updates after simulated internal cd" "$DIFFERENT_CWD" "$cwd_val"
+assert_eq "launch_cwd stays frozen at original launch dir after cwd changes" "$FAKE_CWD" "$launch_cwd_val"
+
+tty_val=$(state_field "$STATE_FILE" '.tty // ""')
+assert_eq "tty stays unchanged across a later event (not re-queried away)" "$expected_tty" "$tty_val"
+
 # --- UserPromptSubmit ---
 run_hook "$STATE_DIR" "$($JQ_BIN -n --arg sid "$SESSION_ID" --arg cwd "$FAKE_CWD" \
   '{session_id: $sid, cwd: $cwd, hook_event_name: "UserPromptSubmit", prompt: "do the thing"}')"

@@ -27,6 +27,50 @@ enum GhosttyFocus {
         }
     }
 
+    /// Focuses an EXACT tab by its (windowIndex, tabIndex) ordinals, as
+    /// established by `GhosttyTabsPoller` -- used when a session has been
+    /// matched to a specific tab, since cwd-matching alone is ambiguous when
+    /// multiple tabs share the same working directory. Reuses the same
+    /// verified `focus (first terminal of ...)` command as `focus(cwd:)`
+    /// rather than assuming tabs themselves also support `focus` directly.
+    static func focusTab(windowIndex: Int, tabIndex: Int) {
+        DispatchQueue.global(qos: .userInitiated).async {
+            let success = runFocusTabScript(windowIndex: windowIndex, tabIndex: tabIndex)
+            if !success {
+                DispatchQueue.main.async {
+                    NSSound.beep()
+                }
+            }
+        }
+    }
+
+    private static func runFocusTabScript(windowIndex: Int, tabIndex: Int) -> Bool {
+        let script = """
+        on run
+            try
+                tell application "Ghostty"
+                    activate
+                    set targetWindow to window \(windowIndex)
+                    set targetTab to tab \(tabIndex) of targetWindow
+                    focus (first terminal of targetTab)
+                end tell
+                return true
+            on error
+                return false
+            end try
+        end run
+        """
+
+        guard let appleScript = NSAppleScript(source: script) else { return false }
+        var errorDict: NSDictionary?
+        let result = appleScript.executeAndReturnError(&errorDict)
+        if let errorDict {
+            NSLog("NotchOtter: Ghostty focusTab AppleScript failed: \(errorDict)")
+            return false
+        }
+        return result.booleanValue
+    }
+
     private static func runFocusScript(cwd: String) -> Bool {
         let projectName = (cwd as NSString).lastPathComponent
         let escapedCwd = appleScriptEscape(cwd)

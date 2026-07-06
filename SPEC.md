@@ -12,8 +12,10 @@ One file per live Claude Code session: `<session_id>.json`
   "session_id": "abc-123",
   "state": "idle | working | waiting_permission | waiting_input | done | error | stale",
   "cwd": "/Users/minje-work-mac/Repos/foo",
+  "launch_cwd": "/Users/minje-work-mac/Repos/foo",
   "project": "foo",
   "pid": 12345,
+  "tty": "ttys014",
   "updated_at": "2026-07-05T14:03:22Z",
   "last_event": "PreToolUse",
   "error_count": 0,
@@ -24,6 +26,8 @@ One file per live Claude Code session: `<session_id>.json`
 Rules:
 - Writes are ATOMIC: write to `<session_id>.json.tmp` then `mv` over.
 - `pid` = the `claude` process PID, captured as `$PPID` inside the hook (hook runs as child of claude).
+- `launch_cwd` (string) = the `cwd` from the FIRST event that creates the state file, captured once and never overwritten afterward. `cwd` itself keeps updating on every event (Claude's internal `cd` changes it), but the Ghostty tab that launched the session keeps reporting the original launch directory, so the app needs `launch_cwd` for tab matching.
+- `tty` (string, optional) = the claude process's controlling tty (e.g. `"ttys014"`), captured once via `ps -o tty= -p $PPID` the same way `pid` is backfilled: only re-attempted while the state file lacks a non-empty `tty`, so it's at most one extra `ps` call per session lifetime, not per event. A `"??"` (no controlling tty) result is stored as empty/absent so the app can treat it as unknown.
 - `outputs` = deduplicated absolute paths from PostToolUse Write/Edit events, append-only, max 200.
 - `state` transitions (hook → state):
   - SessionStart → `idle`
