@@ -271,17 +271,20 @@ WAVE_PAW = [
 
 # Head made a touch bigger/rounder (10 rows, maxhw 7) -- the face is the
 # cuteness anchor and was too small next to the long body. Belly shrunk to
-# roughly the middle third of the torso's top surface (5 rows, maxhw 5,
-# centered under where the laptop/paws sit) so the body reads as clearly
-# dark chocolate overall instead of being mostly swallowed by pale cream --
-# the pale-head/dark-body split is the whole identity cue.
+# a small oval (5 rows, maxhw 4) AND, critically, moved clearly clear of
+# the head's own right edge (head's widest rows reach col 14) so a solid
+# band of dark chocolate separates the pale face from the pale belly --
+# without that gap the two pale regions visually fuse into one big pale
+# mass and the "dark body" read disappears even though the belly itself
+# is small. That's what was wrong the first time: belly left was 13,
+# inside the head's own footprint, touching/overlapping it directly.
 SEA_HEAD_HALFW = [2, 4, 6, 7, 7, 7, 7, 6, 4, 2]     # 10 rows, maxhw 7 -> width 15
 SEA_BODY_HALFW = [5, 9, 11, 12, 12, 12, 11, 9, 5]   # 9 rows, maxhw 12 -> width 25
-SEA_BELLY_HALFW = [3, 5, 5, 4, 2]                   # 5 rows, maxhw 5 -> width 11
+SEA_BELLY_HALFW = [2, 4, 4, 3, 2]                   # 5 rows, maxhw 4 -> width 9
 
 SEA_HEAD_TOP, SEA_HEAD_LEFT = 8, 0
 SEA_BODY_TOP, SEA_BODY_LEFT = 11, 6
-SEA_BELLY_TOP, SEA_BELLY_LEFT = 12, 13
+SEA_BELLY_TOP, SEA_BELLY_LEFT = 12, 17
 SEA_TAIL_TOP, SEA_TAIL_LEFT = 13, 26
 SEA_WATERLINE_ROW = 20
 
@@ -407,8 +410,8 @@ def sea_base(dy=0, eye="open", dx=0, waterline=True):
 
 
 def add_folded_paws(grid, dy=0):
-    stamp(grid, SEA_PAW_SMALL, 14 + dy, 16)
-    stamp(grid, SEA_PAW_SMALL, 14 + dy, 21)
+    stamp(grid, SEA_PAW_SMALL, 14 + dy, 20)
+    stamp(grid, SEA_PAW_SMALL, 14 + dy, 25)
 
 
 def variant_a_idle():
@@ -428,8 +431,8 @@ def variant_a_idle():
 # body (nothing else is drawn past row 20) rather than inside the laptop's
 # own small detail pixels -- that's what made the paws finally read as
 # paws instead of keyboard noise in the previous redesign round.
-SEA_LAPTOP_TOP, SEA_LAPTOP_LEFT = 13, 13
-SEA_KEY_L_COL, SEA_KEY_R_COL = 13, 20
+SEA_LAPTOP_TOP, SEA_LAPTOP_LEFT = 13, 17
+SEA_KEY_L_COL, SEA_KEY_R_COL = 17, 24
 SEA_PAW_LIFT_ROW = SEA_LAPTOP_TOP + 5
 SEA_PAW_CONTACT_ROW = SEA_LAPTOP_TOP + 6
 SEA_PAW_LIFT_SHIFT = 3
@@ -477,12 +480,12 @@ def variant_a_waiting_permission():
     frames = []
     for raised in (True, False):
         g = sea_base(dy=0, eye="open")
-        stamp(g, SEA_PAW_SMALL, 14, 16)
+        stamp(g, SEA_PAW_SMALL, 14, 20)
         if raised:
             stamp(g, SEA_PAW_BIG, 2, 2)
             stamp(g, BUBBLE, 0, 9)
         else:
-            stamp(g, SEA_PAW_SMALL, 14, 21)
+            stamp(g, SEA_PAW_SMALL, 14, 25)
         frames.append(g)
     return frames
 
