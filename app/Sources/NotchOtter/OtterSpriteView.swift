@@ -7,7 +7,14 @@ import AppKit
 /// SPEC.md section 3.
 final class OtterSpriteView: NSView {
     private static let cellSize: CGFloat = 32
-    private static let frameInterval: TimeInterval = 0.4
+    private static let defaultFrameInterval: TimeInterval = 0.4
+    /// `working` animates snappier than the rest so it visibly reads as
+    /// "busy" at a glance.
+    private static let workingFrameInterval: TimeInterval = 0.25
+
+    private static func frameInterval(for state: SessionState) -> TimeInterval {
+        state == .working ? workingFrameInterval : defaultFrameInterval
+    }
 
     private let imageLayer = CALayer()
     private var frames: [CGImage] = []
@@ -50,7 +57,7 @@ final class OtterSpriteView: NSView {
         imageLayer.contents = frames[0]
         guard frames.count > 1 else { return }
 
-        let newTimer = Timer(timeInterval: Self.frameInterval, repeats: true) { [weak self] _ in
+        let newTimer = Timer(timeInterval: Self.frameInterval(for: state), repeats: true) { [weak self] _ in
             self?.advanceFrame()
         }
         RunLoop.main.add(newTimer, forMode: .common)

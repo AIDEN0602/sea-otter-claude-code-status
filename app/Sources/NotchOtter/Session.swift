@@ -91,6 +91,13 @@ final class SessionRecord {
     var isStale: Bool = false
     var staleSince: Date?
 
+    /// When this record was first discovered in memory (not persisted to
+    /// disk). Since `SessionStore` reuses the same `SessionRecord` instance
+    /// across reloads as long as the session file keeps existing, this gives
+    /// a stable sort key for UI ordering (e.g. the companion otter row) that
+    /// never shuffles as session state changes.
+    let firstSeenAt = Date()
+
     init(session: Session, fileURL: URL) {
         self.session = session
         self.fileURL = fileURL

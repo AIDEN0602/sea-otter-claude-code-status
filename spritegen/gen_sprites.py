@@ -71,6 +71,14 @@ def build_palette(ghost=False):
         "!": (247, 197, 55, 255),      # exclaim mark / sparkle gold
         "u": (255, 255, 255, 235),     # bubble fill (white)
         "g": (70, 55, 40, 235),        # bubble outline
+        "L": (215, 217, 222, 255),     # laptop chassis (cool light gray)
+        "l": (146, 149, 156, 255),     # laptop chassis shadow / underside
+        "E": (38, 40, 46, 255),        # laptop screen bezel (near-black)
+        "U": (88, 168, 224, 255),      # laptop screen glow (blue)
+        "V": (156, 214, 255, 255),     # laptop screen glow, bright flicker frame
+        "H": (103, 65, 40, 255),       # sea otter: dark chocolate body/back fur
+        "Y": (78, 48, 29, 255),        # sea otter: chocolate shading (tail/ear)
+        "q": (140, 202, 232, 190),     # sea otter: water line accent (translucent)
     }
     if not ghost:
         return p
@@ -160,29 +168,6 @@ def upscale_nn(img, factor):
 # Shared building blocks (used across variant A poses)
 # ---------------------------------------------------------------------------
 
-EAR = [
-    ".OO.",
-    "OPPO",
-    "OBBO",
-]
-
-HEAD_HALFW = [4, 7, 8, 9, 10, 10, 10, 10, 10, 10, 9, 8, 7, 4]
-BODY_HALFW = [6, 8, 9, 9, 9, 8, 6]
-MUZZLE_HALFW = [3, 5, 5, 3]
-BELLY_HALFW = [3, 5, 5, 4, 2]
-
-TAIL_RIGHT = [
-    ".OO....",
-    "OBBO...",
-    "OBBBO..",
-    ".OBBBO.",
-    "..OBBBO",
-    "..OBBBO",
-    "...OBBO",
-    "....OBO",
-    "....OO.",
-]
-
 CLAM = [
     ".TTT.",
     "TSSST",
@@ -210,79 +195,49 @@ DIZZY = [
     ".O.",
 ]
 
+# Small open laptop: upright glowing screen + flat keyboard deck, sat in
+# front of the belly. Kept a distinct cool gray/blue palette (L/l/E/U) so
+# it never blends into the warm-brown fur silhouette behind it.
+LAPTOP = [
+    "..EEEEEEE..",
+    ".EUUUUUUUE.",
+    ".EUUUUUUUE.",
+    ".EEEEEEEEE.",
+    "LLLLLLLLLLL",
+    "LLLLLLLLLLL",
+    "lllllllllll",
+]
 
-def head_center_col():
-    return 16
+LAPTOP_FLICKER = [
+    "..EEEEEEE..",
+    ".EVVVVVVVE.",
+    ".EVVVVVVVE.",
+    ".EEEEEEEEE.",
+    "LLLLLLLLLLL",
+    "LLLLLLLLLLL",
+    "lllllllllll",
+]
 
+# These (medium-brown "B"/"O" fill) are used by variants B and C, which
+# still use the old single-brown palette -- kept here even though variant
+# A's sea-otter redesign below uses its own chocolate "H" shapes instead.
+EAR = [
+    ".OO.",
+    "OPPO",
+    "OBBO",
+]
 
-def add_ears(grid, spread=0, lift=0):
-    left_top = 3 + lift
-    stamp(grid, EAR, left_top, 8 - spread)
-    stamp(grid, EAR, left_top, 20 + spread)
-
-
-def add_head(grid, dy=0, dx=0):
-    rows = oval_rows(HEAD_HALFW, fill="B", outline="O")
-    stamp(grid, rows, 6 + dy, 6 + dx)
-
-
-def add_body(grid, dy=0):
-    rows = oval_rows(BODY_HALFW, fill="B", outline="O")
-    stamp(grid, rows, 19 + dy, 7)
-
-
-def add_muzzle(grid, dy=0, dx=0):
-    rows = oval_rows(MUZZLE_HALFW, fill="C", outline="c")
-    stamp(grid, rows, 14 + dy, 11 + dx)
-
-
-def add_belly(grid, dy=0):
-    rows = oval_rows(BELLY_HALFW, fill="C", outline="c")
-    stamp(grid, rows, 20 + dy, 11)
-
-
-def add_nose_mouth(grid, dy=0, dx=0, open_mouth=False):
-    grid[16 + dy][16 + dx] = "N"
-    if open_mouth:
-        grid[17 + dy][16 + dx] = "P"
-        grid[18 + dy][15 + dx] = "P"
-        grid[18 + dy][17 + dx] = "P"
-    else:
-        grid[17 + dy][15 + dx] = "P"
-        grid[17 + dy][17 + dx] = "P"
-    # whiskers: two short dashes per cheek, just outside the cream muzzle
-    row = 16 + dy
-    grid[row][9 + dx] = "O"
-    grid[row][23 + dx] = "O"
-    grid[row + 1][8 + dx] = "O"
-    grid[row + 1][24 + dx] = "O"
-
-
-EYE_OPEN = ["KW", "KK"]
-EYE_CLOSED = ["OO"]
-# "wide"/surprised eye: same footprint family as EYE_OPEN, just one ring
-# bigger, with the white highlight kept as a single sparkle pixel so it
-# doesn't read as a solid mask.
-EYE_WIDE = [".K.", "KWK", "KKK"]
-EYE_X = ["R.R", ".R.", "R.R"]
-
-
-def add_eyes(grid, style="open", dy=0, tilt=0):
-    row = 11 + dy
-    lcol, rcol = 11 + tilt, 19 + tilt
-    if style == "open":
-        stamp(grid, EYE_OPEN, row, lcol)
-        stamp(grid, EYE_OPEN, row, rcol)
-    elif style == "closed":
-        stamp(grid, EYE_CLOSED, row + 1, lcol)
-        stamp(grid, EYE_CLOSED, row + 1, rcol)
-    elif style == "wide":
-        stamp(grid, EYE_WIDE, row - 1, lcol - 1)
-        stamp(grid, EYE_WIDE, row - 1, rcol + 1)
-    elif style == "x":
-        stamp(grid, EYE_X, row, lcol)
-        stamp(grid, EYE_X, row, rcol)
-
+TAIL_RIGHT = [
+    ".OO....",
+    "OBBO...",
+    "OBBBO..",
+    ".OBBBO.",
+    "..OBBBO",
+    "..OBBBO",
+    "...OBBO",
+    "....OBO",
+    "....OO.",
+]
 
 PAW_DOWN = [
     "OO",
@@ -295,12 +250,6 @@ PAW_UP = [
     "BB",
 ]
 
-
-def add_paws_sitting(grid, dy=0):
-    stamp(grid, PAW_DOWN, 23 + dy, 9)
-    stamp(grid, PAW_DOWN, 23 + dy, 21)
-
-
 WAVE_PAW = [
     ".OOO.",
     "OBBBO",
@@ -309,95 +258,217 @@ WAVE_PAW = [
 ]
 
 
-def add_arm_wave(grid, raised=True):
-    # left paw stays planted. The waving paw is drawn as its own rounded
-    # blob floating just clear of the head's silhouette (head's right edge
-    # tops out at col 26) rather than a thin connecting arm -- a 2px-wide
-    # line hugging the head's curve reads as noise, not a limb, at 32px.
-    stamp(grid, PAW_DOWN, 23, 9)
-    if raised:
-        stamp(grid, WAVE_PAW, 8, 27)
-    else:
-        stamp(grid, PAW_DOWN, 23, 21)
+# ---------------------------------------------------------------------------
+# Variant A: SEA OTTER floating on its back -- all 7 states
+# ---------------------------------------------------------------------------
+# Sea otters float belly-up and use their chest as a table -- that's the
+# whole pose language here, replacing the old sitting-chibi. The identity
+# markers that must read at a glance: a pale cream/gray face ("C"/"c")
+# against a dark chocolate body ("H"/"O"), tiny low-set ears, and a
+# horizontal on-back silhouette using the full 32px width. Head sits at the
+# left, body/belly extend right, tail at the far right -- same head-then-
+# body overlap technique proven in variant B, just recolored and widened.
 
+# Head made a touch bigger/rounder (10 rows, maxhw 7) -- the face is the
+# cuteness anchor and was too small next to the long body. Belly shrunk to
+# roughly the middle third of the torso's top surface (5 rows, maxhw 5,
+# centered under where the laptop/paws sit) so the body reads as clearly
+# dark chocolate overall instead of being mostly swallowed by pale cream --
+# the pale-head/dark-body split is the whole identity cue.
+SEA_HEAD_HALFW = [2, 4, 6, 7, 7, 7, 7, 6, 4, 2]     # 10 rows, maxhw 7 -> width 15
+SEA_BODY_HALFW = [5, 9, 11, 12, 12, 12, 11, 9, 5]   # 9 rows, maxhw 12 -> width 25
+SEA_BELLY_HALFW = [3, 5, 5, 4, 2]                   # 5 rows, maxhw 5 -> width 11
 
-def add_arms_paddling(grid, side="left"):
-    # paws out front, alternating up/down like paddling water.
-    if side == "left":
-        stamp(grid, PAW_DOWN, 20, 6)
-        stamp(grid, PAW_UP, 24, 22)
-    else:
-        stamp(grid, PAW_UP, 24, 6)
-        stamp(grid, PAW_DOWN, 20, 22)
+SEA_HEAD_TOP, SEA_HEAD_LEFT = 8, 0
+SEA_BODY_TOP, SEA_BODY_LEFT = 11, 6
+SEA_BELLY_TOP, SEA_BELLY_LEFT = 12, 13
+SEA_TAIL_TOP, SEA_TAIL_LEFT = 13, 26
+SEA_WATERLINE_ROW = 20
 
+SEA_EAR = [
+    "HH",
+    "OO",
+]
 
-def add_arms_holding_up(grid, dy=0):
-    # paws stretched up and OUT to the sides (cheer pose) -- kept well
-    # clear of the ears (cols 8-11 / 20-23) so paw and ear don't visually
-    # fuse into one tall blob.
-    stamp(grid, PAW_UP, 2 + dy, 3)
-    stamp(grid, PAW_UP, 2 + dy, 26)
+SEA_TAIL = [
+    "..OOO..",
+    ".OHHHO.",
+    "OHHHHHO",
+    "OHHHHHO",
+    ".OHHHO.",
+    "..OOO..",
+]
 
+# Small folded paw (rests flat on the belly) vs the big rounded paw used
+# whenever a limb needs to read clearly away from the body (typing,
+# waving, holding, splayed) -- chocolate "H" fill so it always matches the
+# body rather than the old medium-brown "B" used by variants B/C.
+SEA_PAW_SMALL = [
+    "OO",
+    "HH",
+]
 
-PAW_SPLAY_LEFT = [
+SEA_PAW_BIG = [
     ".OOO.",
-    "OBBBO",
-    "OBBBO",
+    "OHHHO",
+    "OHHHO",
     ".OOO.",
 ]
 
-PAW_SPLAY_RIGHT = PAW_SPLAY_LEFT
+SEA_EYE_OPEN = ["KW", "KK"]
+SEA_EYE_CLOSED = ["OO"]
+SEA_EYE_WIDE = [".K.", "KWK", "KKK"]
+SEA_EYE_X = ["R.R", ".R.", "R.R"]
+# Lowered lids, cast down toward the laptop -- reads as concentration
+# rather than the fully-shut "closed" style, which looks like napping.
+SEA_EYE_FOCUS = ["OO", "KK"]
 
 
-def add_paws_splayed(grid, dy=0):
-    # otter-on-its-back pose: chunky paws thrown out to the sides, fully
-    # clear of the body silhouette (body spans roughly cols 7-25) so they
-    # read as limbs instead of fuzzing into the outline.
-    stamp(grid, PAW_SPLAY_LEFT, 16 + dy, 0)
-    stamp(grid, PAW_SPLAY_RIGHT, 16 + dy, 27)
+def add_sea_body(grid, dy=0):
+    rows = oval_rows(SEA_BODY_HALFW, fill="H", outline="O")
+    stamp(grid, rows, SEA_BODY_TOP + dy, SEA_BODY_LEFT)
 
 
-def add_tail(grid, dy=0):
-    stamp(grid, TAIL_RIGHT, 18 + dy, 24)
+def add_sea_tail(grid, dy=0):
+    stamp(grid, SEA_TAIL, SEA_TAIL_TOP + dy, SEA_TAIL_LEFT)
 
 
-def base_sit(dy=0, eye="open", mouth_open=False, ear_spread=0, head_dx=0, tail_dy=0):
-    """The common seated chibi pose shared by idle/working/waiting states."""
+def add_sea_belly(grid, dy=0):
+    rows = oval_rows(SEA_BELLY_HALFW, fill="C", outline="c")
+    stamp(grid, rows, SEA_BELLY_TOP + dy, SEA_BELLY_LEFT)
+
+
+def add_sea_head(grid, dy=0, dx=0):
+    # Pale face oval stamped AFTER the body so the face silhouette always
+    # wins in the head/body overlap -- the pale/dark contrast is the whole
+    # point, so the face must never get eaten by the darker torso.
+    rows = oval_rows(SEA_HEAD_HALFW, fill="C", outline="c")
+    stamp(grid, rows, SEA_HEAD_TOP + dy, SEA_HEAD_LEFT + dx)
+
+
+def add_sea_ears(grid, dy=0, dx=0):
+    # Tiny, low on the head (near the lower edge of the face oval), not
+    # tall nubs on top like a land otter -- that low placement is one of
+    # the sea-otter identity cues called out in the brief.
+    stamp(grid, SEA_EAR, 15 + dy, 1 + dx)
+    stamp(grid, SEA_EAR, 15 + dy, 11 + dx)
+
+
+def add_sea_face(grid, style="open", dy=0, dx=0):
+    row = 11 + dy
+    lcol, rcol = 3 + dx, 10 + dx
+    if style == "open":
+        stamp(grid, SEA_EYE_OPEN, row, lcol)
+        stamp(grid, SEA_EYE_OPEN, row, rcol)
+    elif style == "closed":
+        stamp(grid, SEA_EYE_CLOSED, row + 1, lcol)
+        stamp(grid, SEA_EYE_CLOSED, row + 1, rcol)
+    elif style == "focus":
+        stamp(grid, SEA_EYE_FOCUS, row + 1, lcol)
+        stamp(grid, SEA_EYE_FOCUS, row + 1, rcol)
+    elif style == "wide":
+        stamp(grid, SEA_EYE_WIDE, row - 1, lcol - 1)
+        stamp(grid, SEA_EYE_WIDE, row - 1, rcol - 1)
+    elif style == "x":
+        stamp(grid, SEA_EYE_X, row, lcol)
+        stamp(grid, SEA_EYE_X, row, rcol)
+    nose_row = 14 + dy
+    grid[nose_row][7 + dx] = "N"
+    # a couple of whisker dashes per cheek, if they still land inside the
+    # face oval after a head-turn dx shift
+    if 0 <= dx + 1 < 32:
+        grid[13 + dy][1 + dx] = "O"
+    if 0 <= dx + 13 < 32:
+        grid[13 + dy][13 + dx] = "O"
+
+
+def add_sea_waterline(grid, dy=0):
+    # Subtle floating-in-water accent -- translucent so it still reads
+    # (rather than vanishing) on a pure black background.
+    row = SEA_WATERLINE_ROW + dy
+    if not (0 <= row < 32):
+        return
+    for c in (9, 13, 17, 21, 25):
+        grid[row][c] = "q"
+
+
+def sea_base(dy=0, eye="open", dx=0, waterline=True):
+    """The common floating-on-back pose shared by idle/working/waiting."""
     g = new_grid()
-    add_tail(g, dy=tail_dy)
-    add_ears(g, spread=ear_spread, lift=dy)
-    add_head(g, dy=dy, dx=head_dx)
-    add_body(g, dy=dy)
-    add_muzzle(g, dy=dy, dx=head_dx)
-    add_belly(g, dy=dy)
-    add_eyes(g, style=eye, dy=dy, tilt=head_dx)
-    add_nose_mouth(g, dy=dy, dx=head_dx, open_mouth=mouth_open)
+    add_sea_body(g, dy=dy)
+    add_sea_tail(g, dy=dy)
+    add_sea_head(g, dy=dy, dx=dx)
+    add_sea_ears(g, dy=dy, dx=dx)
+    add_sea_belly(g, dy=dy)
+    add_sea_face(g, style=eye, dy=dy, dx=dx)
+    if waterline:
+        add_sea_waterline(g, dy=dy)
     return g
 
 
-# ---------------------------------------------------------------------------
-# Variant A: round chibi -- all 7 states
-# ---------------------------------------------------------------------------
+def add_folded_paws(grid, dy=0):
+    stamp(grid, SEA_PAW_SMALL, 14 + dy, 16)
+    stamp(grid, SEA_PAW_SMALL, 14 + dy, 21)
+
 
 def variant_a_idle():
-    f1 = base_sit(dy=0, eye="open")
-    add_paws_sitting(f1, dy=0)
+    f1 = sea_base(dy=0, eye="open")
+    add_folded_paws(f1, dy=0)
 
-    f2 = base_sit(dy=-1, eye="open")
-    add_paws_sitting(f2, dy=-1)
+    f2 = sea_base(dy=-1, eye="open")
+    add_folded_paws(f2, dy=-1)
 
-    f3 = base_sit(dy=0, eye="closed")
-    add_paws_sitting(f3, dy=0)
+    f3 = sea_base(dy=0, eye="closed")
+    add_folded_paws(f3, dy=0)
     return [f1, f2, f3]
 
 
+# Laptop rests on the belly (the pale "table" patch), keyboard deck low
+# enough that the typing paws mostly hang in the open canvas below the
+# body (nothing else is drawn past row 20) rather than inside the laptop's
+# own small detail pixels -- that's what made the paws finally read as
+# paws instead of keyboard noise in the previous redesign round.
+SEA_LAPTOP_TOP, SEA_LAPTOP_LEFT = 13, 13
+SEA_KEY_L_COL, SEA_KEY_R_COL = 13, 20
+SEA_PAW_LIFT_ROW = SEA_LAPTOP_TOP + 5
+SEA_PAW_CONTACT_ROW = SEA_LAPTOP_TOP + 6
+SEA_PAW_LIFT_SHIFT = 3
+
+
+def add_sea_laptop(grid, flicker=False):
+    stamp(grid, LAPTOP_FLICKER if flicker else LAPTOP, SEA_LAPTOP_TOP, SEA_LAPTOP_LEFT)
+
+
+def add_sea_typing_paws(grid, left_down, spark=None):
+    l_row = SEA_PAW_CONTACT_ROW if left_down else SEA_PAW_LIFT_ROW
+    r_row = SEA_PAW_LIFT_ROW if left_down else SEA_PAW_CONTACT_ROW
+    l_col = SEA_KEY_L_COL if left_down else SEA_KEY_L_COL - SEA_PAW_LIFT_SHIFT
+    r_col = SEA_KEY_R_COL if not left_down else SEA_KEY_R_COL + SEA_PAW_LIFT_SHIFT
+    stamp(grid, SEA_PAW_BIG, l_row, l_col)
+    stamp(grid, SEA_PAW_BIG, r_row, r_col)
+    if spark == "left":
+        grid[l_row - 1][l_col + 1] = "W"
+        grid[l_row - 1][l_col + 2] = "W"
+    elif spark == "right":
+        grid[r_row - 1][r_col + 1] = "W"
+        grid[r_row - 1][r_col + 2] = "W"
+
+
 def variant_a_working():
+    # On its back, laptop propped on the belly, head tipped down toward
+    # the screen. Paws alternate contact/lift on the keys, with a "clack"
+    # spark and a screen-brightness flicker so the motion is unmistakable.
     frames = []
-    for side in ("left", "right", "left", "right"):
-        g = base_sit(dy=0, eye="open", ear_spread=0)
-        add_arms_paddling(g, side=side)
-        clam_dy = -1 if side == "left" else 1
-        stamp(g, CLAM, 21 + clam_dy, 14)
+    steps = [
+        dict(left_down=True, spark="left", flicker=False),
+        dict(left_down=False, spark=None, flicker=True),
+        dict(left_down=True, spark="left", flicker=False),
+        dict(left_down=False, spark="right", flicker=False),
+    ]
+    for step in steps:
+        g = sea_base(dy=0, eye="focus", waterline=False)
+        add_sea_laptop(g, flicker=step["flicker"])
+        add_sea_typing_paws(g, left_down=step["left_down"], spark=step["spark"])
         frames.append(g)
     return frames
 
@@ -405,76 +476,73 @@ def variant_a_working():
 def variant_a_waiting_permission():
     frames = []
     for raised in (True, False):
-        g = base_sit(dy=0, eye="open")
-        add_arm_wave(g, raised=raised)
+        g = sea_base(dy=0, eye="open")
+        stamp(g, SEA_PAW_SMALL, 14, 16)
         if raised:
-            stamp(g, BUBBLE, 0, 26)
+            stamp(g, SEA_PAW_BIG, 2, 2)
+            stamp(g, BUBBLE, 0, 9)
+        else:
+            stamp(g, SEA_PAW_SMALL, 14, 21)
         frames.append(g)
     return frames
 
 
 def variant_a_waiting_input():
-    f1 = base_sit(dy=0, eye="open", head_dx=0)
-    add_paws_sitting(f1, dy=0)
+    f1 = sea_base(dy=0, eye="open", dx=0)
+    add_folded_paws(f1, dy=0)
 
-    f2 = base_sit(dy=0, eye="wide", head_dx=2)
-    add_paws_sitting(f2, dy=0)
+    f2 = sea_base(dy=0, eye="wide", dx=2)
+    add_folded_paws(f2, dy=0)
 
-    f3 = base_sit(dy=0, eye="closed", head_dx=0)
-    add_paws_sitting(f3, dy=0)
+    f3 = sea_base(dy=0, eye="closed", dx=0)
+    add_folded_paws(f3, dy=0)
     return [f1, f2, f3]
 
 
 def variant_a_done():
     frames = []
     for i in range(3):
-        g = base_sit(dy=0, eye="wide", mouth_open=True)
-        add_arms_holding_up(g, dy=0)
-        # clam trophy held up between the raised paws, above the ears.
-        stamp(g, CLAM, 0, 13)
+        g = sea_base(dy=0, eye="wide")
+        # Paws flank the clam tightly at the same height, close enough
+        # (small gaps, not floating far apart) to read as gripping it, and
+        # the whole cluster sits close above the head instead of stranded
+        # high up with a big empty gap in between.
+        stamp(g, SEA_PAW_BIG, 5, 4)
+        stamp(g, SEA_PAW_BIG, 5, 20)
+        stamp(g, CLAM, 6, 12)
         if i in (0, 2):
             stamp(g, SPARKLE, 0, 0)
-            stamp(g, SPARKLE, 6, 29)
+            stamp(g, SPARKLE, 4, 29)
         else:
-            stamp(g, SPARKLE, 6, 0)
+            stamp(g, SPARKLE, 4, 0)
             stamp(g, SPARKLE, 0, 29)
         frames.append(g)
     return frames
 
 
-def on_back_pose(dx=0):
-    """Otter flipped on its back: belly up, paws splayed, X eyes."""
-    g = new_grid()
-    add_tail(g, dy=2)
-    add_ears(g, spread=0, lift=2)
-    add_head(g, dy=2, dx=dx)
-    add_body(g, dy=2)
-    add_muzzle(g, dy=2, dx=dx)
-    add_belly(g, dy=2)
-    add_paws_splayed(g, dy=0)
-    add_eyes(g, style="x", dy=2, tilt=dx)
-    row = 18
-    g[row][15 + dx] = "P"
-    g[row][16 + dx] = "P"
-    g[row][17 + dx] = "P"
-    # little "dizzy" flick marks above the ears
-    stamp(g, DIZZY, 0, 4 + dx)
-    stamp(g, DIZZY, 0, 25 + dx)
+def sea_distressed_pose(dx=0):
+    """Still floating on its back, but distressed: X eyes, paws flung out
+    away from the belly, small dizzy flicks above the head."""
+    g = sea_base(dy=0, eye="x", dx=dx, waterline=False)
+    stamp(g, SEA_PAW_BIG, 2, 1 + dx)
+    stamp(g, SEA_PAW_BIG, 2, 23 + dx)
+    stamp(g, DIZZY, 5, 3 + dx)
+    stamp(g, DIZZY, 5, 9 + dx)
     return g
 
 
 def variant_a_error():
-    # small side-to-side shake between the two frames sells "toppled over".
-    f1 = on_back_pose(dx=0)
-    f2 = on_back_pose(dx=1)
+    # small side-to-side shake between the two frames sells "distressed".
+    f1 = sea_distressed_pose(dx=0)
+    f2 = sea_distressed_pose(dx=1)
     return [f1, f2]
 
 
 def variant_a_stale():
-    f1 = base_sit(dy=0, eye="closed")
-    add_paws_sitting(f1, dy=0)
-    f2 = base_sit(dy=-2, eye="closed")
-    add_paws_sitting(f2, dy=-2)
+    f1 = sea_base(dy=0, eye="closed")
+    add_folded_paws(f1, dy=0)
+    f2 = sea_base(dy=-1, eye="closed")
+    add_folded_paws(f2, dy=-1)
     return [f1, f2]
 
 
@@ -679,7 +747,7 @@ def build_variants_preview(saved):
     draw.rectangle([0, black_y - 4, total_w, black_y + strip_h + 4], fill=(0, 0, 0))
     draw.rectangle([0, light_y - 4, total_w, light_y + strip_h + 4], fill=(232, 232, 228))
 
-    variant_names = {"A": "A - round chibi", "B": "B - long body", "C": "C - tiny 16x16"}
+    variant_names = {"A": "A - sea otter", "B": "B - long body", "C": "C - tiny 16x16"}
     for i, variant in enumerate(("A", "B", "C")):
         idle_path = saved[variant]["idle"][0]
         sheet = Image.open(idle_path).convert("RGBA")

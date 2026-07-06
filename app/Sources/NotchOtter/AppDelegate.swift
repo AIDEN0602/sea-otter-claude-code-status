@@ -24,13 +24,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             companionPanelController: companionPanelController
         )
 
+        // Only the notch otter toggles the shared dropdown; companion otters
+        // left-click straight to focusing their own session's Ghostty tab
+        // (each OtterUnitView handles that itself), so there's no dropdown
+        // wiring for the companion anymore.
         notchPanelController.onToggleDropdown = { [weak self] in
             guard let self else { return }
             self.toggleDropdown(anchor: self.notchPanelController.bottomAnchorPoint)
-        }
-        companionPanelController.onToggleDropdown = { [weak self] in
-            guard let self else { return }
-            self.toggleDropdown(anchor: self.companionPanelController.bottomAnchorPoint)
         }
 
         SessionStore.shared.start()

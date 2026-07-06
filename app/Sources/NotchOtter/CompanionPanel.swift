@@ -2,11 +2,10 @@ import AppKit
 import CoreGraphics
 
 /// Content view for the companion panel: fully transparent (no background at
-/// all -- just the sprite floating), forwards left-clicks to `onClick`, and
-/// hosts a right-click context menu.
+/// all -- just sprites floating), hosts the shared right-click context menu.
+/// Left-click is handled per-otter (see OtterUnitView), not here -- clicking
+/// empty space between otters does nothing.
 final class CompanionContentView: NSView {
-    var onClick: (() -> Void)?
-
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
         wantsLayer = true // layer-backed for smooth compositing; no background color set, so it stays transparent.
@@ -15,31 +14,149 @@ final class CompanionContentView: NSView {
     required init?(coder: NSCoder) {
         fatalError("init(coder:) is not supported")
     }
+}
+
+/// One session's otter + its project-name label, laid out vertically:
+/// otter on top, a small semi-transparent name chip directly underneath.
+/// Left-clicking anywhere on the unit focuses that session's Ghostty tab.
+final class OtterUnitView: NSView {
+    static let otterSize: CGFloat = 96
+    static let labelHeight: CGFloat = 14
+    static let labelWidth: CGFloat = 80
+    /// Gap between the otter's bottom edge and the label chip's top edge.
+    static let gap: CGFloat = 2
+    static let totalWidth: CGFloat = otterSize
+    static let totalHeight: CGFloat = otterSize + gap + labelHeight
+
+    let sessionID: String
+    let cwd: String
+    private let spriteView: OtterSpriteView
+    private let labelBackground: NSView
+    private let labelField: NSTextField
+
+    init(sessionID: String, cwd: String, project: String) {
+        self.sessionID = sessionID
+        self.cwd = cwd
+
+        spriteView = OtterSpriteView(frame: NSRect(
+            x: 0,
+            y: Self.labelHeight + Self.gap,
+            width: Self.otterSize,
+            height: Self.otterSize
+        ))
+
+        let labelX = (Self.otterSize - Self.labelWidth) / 2
+        labelBackground = NSView(frame: NSRect(x: labelX, y: 0, width: Self.labelWidth, height: Self.labelHeight))
+
+        labelField = NSTextField(labelWithString: Self.truncate(project))
+        labelField.font = .boldSystemFont(ofSize: 9)
+        labelField.textColor = .white
+        labelField.alignment = .center
+        labelField.backgroundColor = .clear
+        labelField.isBezeled = false
+        labelField.isEditable = false
+        labelField.isSelectable = false
+        labelField.lineBreakMode = .byTruncatingTail
+        labelField.frame = labelBackground.bounds
+
+        super.init(frame: NSRect(x: 0, y: 0, width: Self.totalWidth, height: Self.totalHeight))
+        wantsLayer = true
+
+        labelBackground.wantsLayer = true
+        labelBackground.layer?.backgroundColor = NSColor.black.withAlphaComponent(0.55).cgColor
+        labelBackground.layer?.cornerRadius = 4
+        labelBackground.layer?.cornerCurve = .continuous
+
+        addSubview(spriteView)
+        addSubview(labelBackground)
+        labelBackground.addSubview(labelField)
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) is not supported")
+    }
+
+    func setState(_ state: SessionState) {
+        spriteView.setState(state)
+    }
 
     override func mouseDown(with event: NSEvent) {
-        onClick?()
+        GhosttyFocus.focus(cwd: cwd)
+    }
+
+    /// Right-click anywhere on a unit shows the row's shared context menu.
+    /// NSView's default `menu(for:)` only returns `self.menu` (nil here), so
+    /// without this override a right-click landing directly on an otter
+    /// would show nothing even though the container has a menu set.
+    override func menu(for event: NSEvent) -> NSMenu? {
+        superview?.menu
+    }
+
+    private static func truncate(_ name: String) -> String {
+        guard name.count > 12 else { return name }
+        return String(name.prefix(11)) + "\u{2026}"
     }
 }
 
-/// A large, transparent "companion" otter that perches on the frontmost
-/// Ghostty window -- the clawd-on-desk feel, visible only while Ghostty is
-/// frontmost and at least one session exists. Never steals focus
-/// (non-activating panel) and never covers the terminal's own content
-/// (perched above the window's top edge, clamped inside it if there's no
-/// room above).
+/// Small "+N" pill shown at the left end of the row when there are more
+/// sessions than fit in the 5-otter cap.
+final class OverflowChipView: NSView {
+    static let width: CGFloat = 28
+    static let height: CGFloat = 18
+
+    let count: Int
+
+    init(count: Int) {
+        self.count = count
+        super.init(frame: NSRect(x: 0, y: 0, width: Self.width, height: Self.height))
+        wantsLayer = true
+        layer?.backgroundColor = NSColor.black.withAlphaComponent(0.55).cgColor
+        layer?.cornerRadius = Self.height / 2
+        layer?.cornerCurve = .continuous
+
+        let label = NSTextField(labelWithString: "+\(count)")
+        label.font = .boldSystemFont(ofSize: 10)
+        label.textColor = .white
+        label.alignment = .center
+        label.backgroundColor = .clear
+        label.isBezeled = false
+        label.isEditable = false
+        label.isSelectable = false
+        label.frame = bounds
+        addSubview(label)
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) is not supported")
+    }
+
+    override func menu(for event: NSEvent) -> NSMenu? {
+        superview?.menu
+    }
+}
+
+/// A row of "companion" otters -- one per live session, each animating its
+/// own session's state -- perched on the frontmost Ghostty window. Visible
+/// only while Ghostty is frontmost and at least one session exists. Never
+/// steals focus (non-activating panel) and never covers the terminal's own
+/// content (perched above the window's top edge, clamped inside it if
+/// there's no room above).
 final class CompanionPanelController {
-    /// 32px native sprite cell x3 = 96pt, per spec.
-    private static let displaySize: CGFloat = 96
     private static let rightMargin: CGFloat = 24
+    private static let rowSpacing: CGFloat = 8
+    private static let maxOtters = 5
     private static let hiddenPrefKey = "NotchOtter.companionHidden"
     private static let ghosttyOwnerName = "Ghostty"
     private static let pollInterval: TimeInterval = 1.0
 
     let panel: NSPanel
     private let contentView: CompanionContentView
-    private let spriteView: OtterSpriteView
 
-    var onToggleDropdown: (() -> Void)?
+    /// Currently-shown per-session unit views, keyed by session_id, reused
+    /// across updates (rather than destroyed/recreated) so an otter whose
+    /// state hasn't changed doesn't have its walk-cycle animation reset.
+    private var unitViews: [String: OtterUnitView] = [:]
+    private var overflowChipView: OverflowChipView?
 
     /// True when the user hid the companion (status bar menu or its own
     /// right-click "Hide Companion"); persisted so it survives relaunch.
@@ -50,9 +167,8 @@ final class CompanionPanelController {
     private var activationObserver: NSObjectProtocol?
 
     init() {
-        let size = Self.displaySize
         panel = NSPanel(
-            contentRect: NSRect(x: 0, y: 0, width: size, height: size),
+            contentRect: NSRect(x: 0, y: 0, width: OtterUnitView.totalWidth, height: OtterUnitView.totalHeight),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false
@@ -67,10 +183,7 @@ final class CompanionPanelController {
         panel.hidesOnDeactivate = false
         panel.isReleasedWhenClosed = false
 
-        contentView = CompanionContentView(frame: NSRect(x: 0, y: 0, width: size, height: size))
-        spriteView = OtterSpriteView(frame: NSRect(x: 0, y: 0, width: size, height: size))
-        contentView.addSubview(spriteView)
-        contentView.onClick = { [weak self] in self?.onToggleDropdown?() }
+        contentView = CompanionContentView(frame: NSRect(x: 0, y: 0, width: OtterUnitView.totalWidth, height: OtterUnitView.totalHeight))
         contentView.menu = buildContextMenu()
         panel.contentView = contentView
 
@@ -92,17 +205,16 @@ final class CompanionPanelController {
         }
     }
 
-    /// Refreshes the otter animation and re-evaluates visibility for the
-    /// current store state. Reuses `SessionStore.highestPriorityState` --
-    /// the same source of truth as the notch panel -- rather than
-    /// duplicating any state computation.
+    /// Rebuilds the otter row for the current session set and re-evaluates
+    /// visibility. Reuses `SessionStore.visibleRecords` directly -- no
+    /// duplicated state computation.
     func update(store: SessionStore) {
-        guard let state = store.highestPriorityState else {
-            hidePanel()
-            return
-        }
-        spriteView.setState(state)
-        refreshVisibility(sessionsPresent: true)
+        let sorted = store.visibleRecords.sorted { $0.firstSeenAt < $1.firstSeenAt }
+        let overflowCount = max(0, sorted.count - Self.maxOtters)
+        let displayed = overflowCount > 0 ? Array(sorted.suffix(Self.maxOtters)) : sorted
+
+        rebuildRow(displayed: displayed, overflowCount: overflowCount)
+        refreshVisibility(sessionsPresent: !sorted.isEmpty)
     }
 
     /// Toggled by the status bar menu's "Show/Hide Companion" item.
@@ -114,6 +226,64 @@ final class CompanionPanelController {
         isManuallyHidden = hidden
         UserDefaults.standard.set(hidden, forKey: Self.hiddenPrefKey)
         refreshVisibility(sessionsPresent: !SessionStore.shared.visibleRecords.isEmpty)
+    }
+
+    // MARK: - Row layout
+
+    /// Diffs `displayed` against the currently-shown unit views: removes
+    /// views for sessions no longer displayed, creates views for newly
+    /// displayed sessions, and repositions/updates state for all of them.
+    /// Oldest-to-newest left-to-right, so the newest (most recently started)
+    /// session sits rightmost, closest to the notch/window corner; the
+    /// overflow "+N" chip (if any) sits at the row's left end.
+    private func rebuildRow(displayed: [SessionRecord], overflowCount: Int) {
+        let displayedIDs = Set(displayed.map { $0.session.sessionID })
+        for (id, view) in unitViews where !displayedIDs.contains(id) {
+            view.removeFromSuperview()
+            unitViews.removeValue(forKey: id)
+        }
+
+        let sharedMenu = contentView.menu
+
+        if overflowCount > 0 {
+            if overflowChipView?.count != overflowCount {
+                overflowChipView?.removeFromSuperview()
+                let chip = OverflowChipView(count: overflowCount)
+                chip.menu = sharedMenu
+                contentView.addSubview(chip)
+                overflowChipView = chip
+            }
+        } else if let existing = overflowChipView {
+            existing.removeFromSuperview()
+            overflowChipView = nil
+        }
+
+        var cursorX: CGFloat = 0
+        if overflowCount > 0 {
+            overflowChipView?.setFrameOrigin(NSPoint(x: cursorX, y: (OtterUnitView.totalHeight - OverflowChipView.height) / 2))
+            cursorX += OverflowChipView.width + Self.rowSpacing
+        }
+
+        for record in displayed {
+            let id = record.session.sessionID
+            let unit: OtterUnitView
+            if let existing = unitViews[id] {
+                unit = existing
+            } else {
+                unit = OtterUnitView(sessionID: id, cwd: record.session.cwd, project: record.session.project)
+                unit.menu = sharedMenu
+                contentView.addSubview(unit)
+                unitViews[id] = unit
+            }
+            unit.setState(record.displayState)
+            unit.setFrameOrigin(NSPoint(x: cursorX, y: 0))
+            cursorX += OtterUnitView.totalWidth + Self.rowSpacing
+        }
+
+        let rowWidth = max(OtterUnitView.totalWidth, cursorX - Self.rowSpacing)
+        let size = NSSize(width: rowWidth, height: OtterUnitView.totalHeight)
+        panel.setContentSize(size)
+        contentView.frame = NSRect(origin: .zero, size: size)
     }
 
     // MARK: - Visibility rule: Ghostty frontmost + sessions exist + not hidden
@@ -165,48 +335,74 @@ final class CompanionPanelController {
 
     // MARK: - Perch positioning
 
-    /// Repositions onto the frontmost Ghostty window's top-right area, or
-    /// hides the companion if no Ghostty window bounds can be found (e.g.
-    /// all windows minimized).
+    /// Repositions the row onto the frontmost Ghostty window's top-right
+    /// area, or hides the companion if no Ghostty window bounds can be found
+    /// (e.g. all windows minimized). The perch anchor is unchanged from the
+    /// single-otter version: each otter's own bottom edge sits ON the
+    /// window's top edge; the label chips hang below that line (slightly
+    /// over the window's own top edge), and the clamp-inside-the-window
+    /// fallback now nests the whole otter+label unit rather than just the
+    /// otter.
     private func repositionToGhosttyWindow() {
         guard let windowFrame = Self.frontmostGhosttyWindowFrame() else {
             panel.orderOut(nil)
             return
         }
-        guard let screen = NSScreen.main else { return }
-
-        let size = Self.displaySize
-        var x = windowFrame.maxX - size - Self.rightMargin
-        // Bottom edge of the otter sits ON the window's top edge (AppKit
-        // coordinates are bottom-left origin, so the panel's own origin.y is
-        // the window's top edge y-value).
-        var y = windowFrame.maxY
-
-        // Clamp: if perching above the window would go above the screen's
-        // visible area (window touches the menu bar / near-fullscreen),
-        // nest the otter INSIDE the window's top-right corner instead.
-        if y + size > screen.frame.maxY {
-            y = windowFrame.maxY - size
+        // Clamp against whichever screen actually contains the Ghostty
+        // window, not just NSScreen.main -- on multi-monitor setups the key
+        // application's screen and the screen the terminal window lives on
+        // can differ.
+        guard let screen = NSScreen.screens.first(where: { $0.frame.intersects(windowFrame) }) ?? NSScreen.main else {
+            return
         }
 
-        // Keep the otter horizontally within the window's own bounds.
-        x = min(x, windowFrame.maxX - size)
+        let rowWidth = panel.frame.width
+        let unitHeight = OtterUnitView.totalHeight
+        let perchLocalY = OtterUnitView.labelHeight + OtterUnitView.gap // local y of the otter's bottom edge
+
+        var x = windowFrame.maxX - rowWidth - Self.rightMargin
+        var y = windowFrame.maxY - perchLocalY
+
+        // Clamp: if perching above the window would push the otters' tops
+        // above the screen's visible area (window touches the menu bar /
+        // near-fullscreen), nest the whole unit INSIDE the window's
+        // top-right corner instead.
+        if y + unitHeight > screen.frame.maxY {
+            y = windowFrame.maxY - unitHeight
+        }
+
+        // Keep the row horizontally within the window's own bounds.
+        x = min(x, windowFrame.maxX - rowWidth)
         x = max(x, windowFrame.minX)
 
-        panel.setFrame(NSRect(x: x, y: y, width: size, height: size), display: true)
+        panel.setFrame(NSRect(x: x, y: y, width: rowWidth, height: unitHeight), display: true)
         if !isManuallyHidden {
             panel.orderFrontRegardless()
         }
     }
 
-    /// Bounds of the frontmost on-screen Ghostty window, converted from
+    /// Below this size, a Ghostty window is treated as a quick-terminal-style
+    /// overlay/sliver rather than a real terminal window worth perching on.
+    private static let minRealWindowWidth: CGFloat = 400
+    private static let minRealWindowHeight: CGFloat = 150
+
+    /// Bounds of the frontmost real on-screen Ghostty window, converted from
     /// Quartz global-display coordinates (top-left origin, y-down) to AppKit
     /// screen coordinates (bottom-left origin, y-up). Only reads owner name,
     /// window layer, and bounds -- none of which require Screen Recording /
     /// Accessibility permission (unlike window titles, which are
     /// deliberately never read here).
     private static func frontmostGhosttyWindowFrame() -> NSRect? {
-        guard let mainScreen = NSScreen.screens.first else { return nil }
+        // Quartz's global display coordinate space is anchored at the
+        // top-left of the PRIMARY display (the one with the menu bar), which
+        // AppKit always places at frame origin (0, 0) -- not necessarily
+        // `NSScreen.screens.first` (that array's ordering isn't documented
+        // to put the primary display first, and on multi-monitor setups it
+        // sometimes doesn't). Anchoring the Y-flip to the wrong screen would
+        // silently misplace the companion on any secondary display.
+        guard let anchorScreen = NSScreen.screens.first(where: { $0.frame.origin == .zero }) ?? NSScreen.main else {
+            return nil
+        }
 
         let options: CGWindowListOption = [.optionOnScreenOnly, .excludeDesktopElements]
         guard let infoList = CGWindowListCopyWindowInfo(options, kCGNullWindowID) as? [[String: Any]] else {
@@ -214,8 +410,9 @@ final class CompanionPanelController {
         }
 
         // CGWindowListCopyWindowInfo with .optionOnScreenOnly returns windows
-        // already ordered front-to-back, so the first Ghostty match is the
-        // frontmost one.
+        // already ordered front-to-back, so this preserves z-order
+        // (candidates[0] is the frontmost Ghostty window, if any).
+        var candidates: [NSRect] = []
         for info in infoList {
             guard let ownerName = info[kCGWindowOwnerName as String] as? String,
                   ownerName == ghosttyOwnerName else { continue }
@@ -224,16 +421,20 @@ final class CompanionPanelController {
                   let x = bounds["X"], let quartzY = bounds["Y"],
                   let width = bounds["Width"], let height = bounds["Height"] else { continue }
 
-            let appKitY = mainScreen.frame.height - quartzY - height
-            return NSRect(x: x, y: appKitY, width: width, height: height)
+            let appKitY = anchorScreen.frame.height - quartzY - height
+            candidates.append(NSRect(x: x, y: appKitY, width: width, height: height))
         }
-        return nil
-    }
 
-    /// Screen point (in screen coordinates) directly below the companion,
-    /// used to anchor the shared dropdown when toggled from here.
-    var bottomAnchorPoint: NSPoint {
-        NSPoint(x: panel.frame.minX, y: panel.frame.minY)
+        guard !candidates.isEmpty else { return nil }
+
+        // Skip quick-terminal-style slivers/overlays (too narrow or too
+        // short to be a real terminal window) and take the frontmost
+        // survivor. If every on-screen Ghostty window is that small, fall
+        // back to the largest by area rather than showing nothing.
+        if let realWindow = candidates.first(where: { $0.width >= minRealWindowWidth && $0.height >= minRealWindowHeight }) {
+            return realWindow
+        }
+        return candidates.max(by: { $0.width * $0.height < $1.width * $1.height })
     }
 
     // MARK: - Context menu (right-click kill switch)
