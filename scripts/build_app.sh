@@ -8,7 +8,7 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 APP_DIR="$REPO_ROOT/app"
 DIST_DIR="$REPO_ROOT/dist"
 APP_BUNDLE="$DIST_DIR/NotchOtter.app"
-SPRITES_SRC="$REPO_ROOT/assets/sprites/A"
+SPRITES_SRC="$REPO_ROOT/assets/sprites/chatgpt"
 BUNDLE_ID="com.minje.notchotter"
 BUILD_CONFIG="${1:-release}"
 

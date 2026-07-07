@@ -3,10 +3,10 @@ import AppKit
 /// Displays one frame of a state's sprite sheet at a time, stepping through
 /// frames on a timer with nearest-neighbor (pixel-perfect) scaling.
 /// Sprite sheets are loaded from `Contents/Resources/sprites/<state>.png`,
-/// laid out horizontally in 32x32 cells (frame count = width / 32), per
-/// SPEC.md section 3.
+/// laid out horizontally in square cells: cell size = sheet height, so
+/// frame count = width / height (SPEC.md section 3; a 96x32 sheet is 3
+/// frames, a 501x167 sheet is 3 frames).
 final class OtterSpriteView: NSView {
-    private static let cellSize: CGFloat = 32
     private static let defaultFrameInterval: TimeInterval = 0.4
     /// `working` animates snappier than the rest so it visibly reads as
     /// "busy" at a glance.
@@ -85,8 +85,8 @@ final class OtterSpriteView: NSView {
 
         let pixelWidth = cgImage.width
         let pixelHeight = cgImage.height
-        let cellPixels = Int(cellSize)
-        guard cellPixels > 0, pixelWidth >= cellPixels, pixelHeight > 0 else {
+        let cellPixels = pixelHeight
+        guard cellPixels > 0, pixelWidth >= cellPixels else {
             return [cgImage]
         }
 

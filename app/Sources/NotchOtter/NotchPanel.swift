@@ -24,20 +24,18 @@ final class NotchContentView: NSView {
     }
 }
 
-/// Owns the always-visible notch-adjacent panel: a compact colored-count
-/// badge plus an animated otter sprite that hugs the notch. Non-activating,
-/// borderless, flush against the notch's LEFT edge and spanning the exact
-/// safe-area strip height, so it reads as a true horizontal extension of the
-/// notch rather than a floating overlay. Layout is [badge][otter] left to
-/// right, so the otter itself is the element touching the notch.
+/// Owns the always-visible Dynamic-Island-style panel: a black pill hanging
+/// directly BELOW the notch (top corners square so it visually merges with
+/// the notch into one shape, bottom corners rounded), containing an animated
+/// otter sprite plus a compact colored-count badge, centered. Non-activating
+/// and borderless; the panel is at least as wide as the notch itself so its
+/// sides always line up with the notch's edges.
 final class NotchPanelController {
-    /// Max 2pt padding on either side -- keeps the panel exactly
-    /// content-sized with no leftover empty space.
-    private static let horizontalPadding: CGFloat = 2
-    private static let spriteBadgeGap: CGFloat = 2
-    /// Matches NotchGeometry's no-notch fallback strip height.
-    private static let fallbackStripHeight: CGFloat = 24
-    private static let cornerRadius: CGFloat = 6
+    private static let horizontalPadding: CGFloat = 10
+    private static let spriteBadgeGap: CGFloat = 4
+    /// Height of the black extension hanging below the notch.
+    private static let panelHeight: CGFloat = 40
+    private static let cornerRadius: CGFloat = 14
     private static let hiddenPrefKey = "NotchOtter.manuallyHidden"
 
     let panel: NSPanel
@@ -53,7 +51,7 @@ final class NotchPanelController {
 
     init() {
         panel = NSPanel(
-            contentRect: NSRect(x: 0, y: 0, width: 40, height: Self.fallbackStripHeight),
+            contentRect: NSRect(x: 0, y: 0, width: 120, height: Self.panelHeight),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false
@@ -67,13 +65,13 @@ final class NotchPanelController {
         panel.hidesOnDeactivate = false
         panel.isReleasedWhenClosed = false
 
-        contentView = NotchContentView(frame: NSRect(x: 0, y: 0, width: 40, height: Self.fallbackStripHeight))
+        contentView = NotchContentView(frame: NSRect(x: 0, y: 0, width: 120, height: Self.panelHeight))
         contentView.layer?.cornerRadius = Self.cornerRadius
-        // Square top corners (flush with the menu bar strip) and square
-        // bottom-right corner (touches the notch, since the panel now sits
-        // to its LEFT); round only the outer bottom-left corner so the panel
-        // reads as a small tab hanging off the notch, not a floating box.
-        contentView.layer?.maskedCorners = [.layerMinXMinYCorner]
+        // Square TOP corners (they meet the notch's bottom edge, merging the
+        // panel and the notch into one continuous black shape) and rounded
+        // BOTTOM corners, exactly like the notch's own silhouette / iPhone's
+        // Dynamic Island.
+        contentView.layer?.maskedCorners = [.layerMinXMinYCorner, .layerMaxXMinYCorner]
 
         spriteView = OtterSpriteView(frame: .zero)
 
@@ -130,50 +128,42 @@ final class NotchPanelController {
         }
     }
 
-    /// Lays out [badge][otter] left-to-right so the otter is the element
-    /// touching the notch, and sizes the panel to exactly the content width
-    /// -- no fixed minimums, no spare pixels.
+    /// Lays out [otter][badge] centered inside the pill. The panel is at
+    /// least as wide as the notch itself so its sides always line up with
+    /// the notch's edges; it only grows wider when the content needs it.
     private func layoutContent() {
-        let screen = NSScreen.main
-        let stripHeight = screen.flatMap { NotchGeometry.metrics(for: $0)?.stripHeight } ?? Self.fallbackStripHeight
-        let scale = screen?.backingScaleFactor ?? 2
+        let spriteSize = Self.panelHeight - 6
+        let spriteY = (Self.panelHeight - spriteSize) / 2
 
-        let spriteSize = Self.spriteDisplaySize(stripHeight: stripHeight, scale: scale)
-        let spriteY = (stripHeight - spriteSize) / 2
-
-        var width: CGFloat
-
+        var contentWidth = spriteSize
         if !badgeLabel.isHidden {
             badgeLabel.sizeToFit()
-            let badgeOrigin = CGPoint(
-                x: Self.horizontalPadding,
-                y: (stripHeight - badgeLabel.frame.height) / 2
-            )
-            badgeLabel.setFrameOrigin(badgeOrigin)
-            let spriteX = badgeOrigin.x + badgeLabel.frame.width + Self.spriteBadgeGap
-            spriteView.setFrameOrigin(NSPoint(x: spriteX, y: spriteY))
-            width = spriteX + spriteSize + Self.horizontalPadding
-        } else {
-            let spriteX = Self.horizontalPadding
-            spriteView.setFrameOrigin(NSPoint(x: spriteX, y: spriteY))
-            width = spriteX + spriteSize + Self.horizontalPadding
+            contentWidth += Self.spriteBadgeGap + badgeLabel.frame.width
         }
 
-        spriteView.setFrameSize(NSSize(width: spriteSize, height: spriteSize))
+        let notchWidth = NotchGeometry.islandScreen.flatMap { NotchGeometry.metrics(for: $0)?.notchWidth } ?? 0
+        let width = max(notchWidth, contentWidth + Self.horizontalPadding * 2)
 
-        let newSize = NSSize(width: width, height: stripHeight)
+        let spriteX = (width - contentWidth) / 2
+        spriteView.frame = NSRect(x: spriteX, y: spriteY, width: spriteSize, height: spriteSize)
+        if !badgeLabel.isHidden {
+            badgeLabel.setFrameOrigin(NSPoint(
+                x: spriteX + spriteSize + Self.spriteBadgeGap,
+                y: (Self.panelHeight - badgeLabel.frame.height) / 2
+            ))
+        }
+
+        let newSize = NSSize(width: width, height: Self.panelHeight)
         panel.setContentSize(newSize)
         contentView.frame = NSRect(origin: .zero, size: newSize)
     }
 
-    /// Re-pins the panel flush against the notch's LEFT edge (panel's right
-    /// edge meets the notch's left edge), spanning the full safe-area strip
-    /// height. Call after content size changes and on screen configuration
-    /// changes.
+    /// Re-pins the panel directly below the notch (top edge flush with the
+    /// bottom of the menu bar strip, horizontally centered on the notch).
+    /// Call after content size changes and on screen configuration changes.
     func reposition() {
-        guard let screen = NSScreen.main else { return }
-        let width = panel.frame.width
-        let frame = NotchGeometry.panelFrameLeftOfNotch(on: screen, width: width)
+        guard let screen = NotchGeometry.islandScreen else { return }
+        let frame = NotchGeometry.panelFrameBelowNotch(on: screen, size: panel.frame.size)
         panel.setFrame(frame, display: true)
     }
 
@@ -181,32 +171,6 @@ final class NotchPanelController {
     /// anchor the dropdown.
     var bottomAnchorPoint: NSPoint {
         NSPoint(x: panel.frame.minX, y: panel.frame.minY)
-    }
-
-    // MARK: - Sprite sizing
-
-    /// The otter should fill the strip height (minus 2-3pt of padding), and
-    /// prefers a height whose physical-pixel size lands on a whole multiple
-    /// of the sprite's native 32px cell for crisp nearest-neighbor scaling.
-    /// Falls back to the plain padded height when no such multiple fits
-    /// inside the 2-3pt padding budget (common on typical current notch
-    /// strip heights, e.g. 32pt).
-    private static func spriteDisplaySize(stripHeight: CGFloat, scale: CGFloat) -> CGFloat {
-        let minPadding: CGFloat = 2
-        let maxPadding: CGFloat = 3
-        let paddedHeight = stripHeight - (minPadding + maxPadding) / 2
-
-        let nativeCell: CGFloat = 32
-        let physicalPadded = paddedHeight * scale
-        let nearestMultiple = (physicalPadded / nativeCell).rounded() * nativeCell
-        let candidate = nearestMultiple / scale
-
-        let minHeight = stripHeight - maxPadding
-        let maxHeight = stripHeight - minPadding
-        if candidate >= minHeight && candidate <= maxHeight {
-            return candidate
-        }
-        return paddedHeight
     }
 
     // MARK: - Compact badge
