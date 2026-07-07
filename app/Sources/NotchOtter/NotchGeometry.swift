@@ -61,35 +61,32 @@ enum NotchGeometry {
         )
     }
 
-    /// The screen the island panel should live on: the notched (built-in)
-    /// display when one is active, otherwise the main screen -- so in
-    /// clamshell mode the panel becomes a fake Dynamic Island at the top
-    /// center of the external monitor instead of disappearing.
-    static var islandScreen: NSScreen? {
-        NSScreen.screens.first(where: { $0.safeAreaInsets.top > 0 }) ?? NSScreen.main
-    }
-
-    /// Frame (screen coordinates) for a Dynamic-Island-style panel hanging
-    /// directly BELOW the notch: horizontally centered on the notch, top edge
-    /// flush with the bottom of the menu bar / safe-area strip, so the black
-    /// panel reads as the notch itself extending downward. On screens with no
-    /// notch (external monitors / clamshell mode) it hangs below the menu bar
-    /// at top center, reading as a standalone Dynamic Island pill.
-    static func panelFrameBelowNotch(on screen: NSScreen, size: NSSize) -> NSRect {
+    /// Frame (screen coordinates) for a panel of `width` positioned
+    /// immediately LEFT of the notch (panel's right edge flush against the
+    /// notch's left edge, zero gap), spanning the exact strip height. Falls
+    /// back to a standard-menu-bar-height placement on screens with no notch.
+    static func panelFrameLeftOfNotch(on screen: NSScreen, width: CGFloat) -> NSRect {
         let screenFrame = screen.frame
 
         if let notch = metrics(for: screen) {
-            let centerX = (notch.leftEdgeX + notch.rightEdgeX) / 2
-            let y = screenFrame.maxY - notch.stripHeight - size.height
-            return NSRect(x: centerX - size.width / 2, y: y, width: size.width, height: size.height)
+            let y = screenFrame.maxY - notch.stripHeight
+            let x = notch.leftEdgeX - width
+            return NSRect(x: x, y: y, width: width, height: notch.stripHeight)
         }
 
-        // No notch: hang just below the actual menu bar (its height is the
-        // gap between the screen frame and the visible frame; safeAreaInsets
-        // is 0 here so it can't be used).
-        let menuBarHeight = screenFrame.maxY - screen.visibleFrame.maxY
-        let y = screenFrame.maxY - menuBarHeight - size.height
-        return NSRect(x: screenFrame.midX - size.width / 2, y: y, width: size.width, height: size.height)
+        // No notch: standard 24pt menu bar strip; park near top-center since
+        // "left of the notch" is meaningless without one.
+        let fallbackHeight: CGFloat = 24
+        let y = screenFrame.maxY - fallbackHeight
+        let x = screenFrame.midX - width
+        return NSRect(x: x, y: y, width: width, height: fallbackHeight)
+    }
+
+    /// The screen the notch panel should live on: the notched (built-in)
+    /// display when one is active, otherwise the main screen (clamshell mode
+    /// falls back to the menu bar strip of the external monitor).
+    static var panelScreen: NSScreen? {
+        NSScreen.screens.first(where: { $0.safeAreaInsets.top > 0 }) ?? NSScreen.main
     }
 
     /// True when the main screen reports a physical notch.
