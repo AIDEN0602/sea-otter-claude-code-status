@@ -61,16 +61,26 @@ enum NotchGeometry {
         )
     }
 
+    /// How far the panel slides UNDER the notch's left edge. The current
+    /// sprite sheet bakes transparent margins into each square cell, so a
+    /// panel that stops exactly at the notch edge leaves the otter looking
+    /// detached from it; overhanging by this much hides the margin beneath
+    /// the (black) notch and puts the otter's body visually flush against
+    /// the notch. Invisible on the notch itself; applied on notched screens
+    /// only.
+    private static let notchOverhang: CGFloat = 6
+
     /// Frame (screen coordinates) for a panel of `width` positioned
-    /// immediately LEFT of the notch (panel's right edge flush against the
-    /// notch's left edge, zero gap), spanning the exact strip height. Falls
-    /// back to a standard-menu-bar-height placement on screens with no notch.
+    /// immediately LEFT of the notch (panel's right edge tucked slightly
+    /// under the notch's left edge so the otter reads as touching it),
+    /// spanning the exact strip height. Falls back to a
+    /// standard-menu-bar-height placement on screens with no notch.
     static func panelFrameLeftOfNotch(on screen: NSScreen, width: CGFloat) -> NSRect {
         let screenFrame = screen.frame
 
         if let notch = metrics(for: screen) {
             let y = screenFrame.maxY - notch.stripHeight
-            let x = notch.leftEdgeX - width
+            let x = notch.leftEdgeX - width + notchOverhang
             return NSRect(x: x, y: y, width: width, height: notch.stripHeight)
         }
 
