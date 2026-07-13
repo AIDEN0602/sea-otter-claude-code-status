@@ -50,6 +50,18 @@ final class OtterUnitView: NSView {
     /// than unmatched ones), used by the row layout to step `cursorX`.
     private(set) var totalWidth: CGFloat
 
+    /// Set by the controller so dragging any otter moves the whole row
+    /// (mirrors the desktop pet's drag behavior); a sub-4pt press-and-release
+    /// still focuses the session's tab.
+    weak var dragTarget: NSPanel?
+    var onDragStart: (() -> Void)?
+    var onDragEnd: (() -> Void)?
+
+    private static let dragThreshold: CGFloat = 4
+    private var pressOrigin: NSPoint?
+    private var panelOriginAtPress: NSPoint?
+    private var didDrag = false
+
     private let spriteView: OtterSpriteView
     private let labelBackground: NSView
     private let labelField: NSTextField
@@ -123,6 +135,33 @@ final class OtterUnitView: NSView {
     }
 
     override func mouseDown(with event: NSEvent) {
+        pressOrigin = NSEvent.mouseLocation
+        panelOriginAtPress = dragTarget?.frame.origin
+        didDrag = false
+    }
+
+    override func mouseDragged(with event: NSEvent) {
+        guard let pressOrigin, let panelOriginAtPress, let panel = dragTarget else { return }
+        let now = NSEvent.mouseLocation
+        let dx = now.x - pressOrigin.x
+        let dy = now.y - pressOrigin.y
+        if !didDrag {
+            guard abs(dx) >= Self.dragThreshold || abs(dy) >= Self.dragThreshold else { return }
+            didDrag = true
+            onDragStart?()
+        }
+        panel.setFrameOrigin(NSPoint(x: panelOriginAtPress.x + dx, y: panelOriginAtPress.y + dy))
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        defer {
+            pressOrigin = nil
+            panelOriginAtPress = nil
+        }
+        if didDrag {
+            onDragEnd?()
+            return
+        }
         switch focusTarget {
         case let .tab(windowIndex, tabIndex):
             GhosttyFocus.focusTab(windowIndex: windowIndex, tabIndex: tabIndex)
@@ -224,9 +263,9 @@ final class CompanionPanelController {
     /// INSIDE the window (maximized / touching the menu bar): clears
     /// Ghostty's title-bar-plus-tab-strip so the otters never cover the tabs
     /// -- the panel swallows clicks, so covering the tab bar made tabs
-    /// unclickable. Generous on purpose: 44 still grazed the strip's hit
-    /// area on a maximized window.
-    private static let nestedTabBarOffset: CGFloat = 76
+    /// unclickable. Tuned by eye: 44 still grazed the strip's hit area on a
+    /// maximized window, 76 sat too deep into the terminal content.
+    private static let nestedTabBarOffset: CGFloat = 50
     private static let hiddenPrefKey = "NotchOtter.companionHidden"
     private static let ghosttyOwnerName = "Ghostty"
     private static let pollInterval: TimeInterval = 1.0
@@ -243,6 +282,18 @@ final class CompanionPanelController {
     /// True when the user hid the companion (status bar menu or its own
     /// right-click "Hide Companion"); persisted so it survives relaunch.
     private(set) var isManuallyHidden: Bool = UserDefaults.standard.bool(forKey: CompanionPanelController.hiddenPrefKey)
+
+    private static let offsetXPrefKey = "NotchOtter.companionOffsetX"
+    private static let offsetYPrefKey = "NotchOtter.companionOffsetY"
+
+    /// Where the user parked the row, as an offset from the frontmost
+    /// Ghostty window's bottom-left origin -- relative, so the row keeps
+    /// following the window around. nil = default perch position. Persisted
+    /// across relaunches; cleared via the right-click "Reset Position" item.
+    private var customOffset: NSPoint? = CompanionPanelController.loadOffset()
+    /// Suspends the follow timer's repositioning while the user is
+    /// mid-drag, so it doesn't yank the row back every second.
+    private var isDraggingRow = false
 
     private var isGhosttyFrontmost = false
     private var pollTimer: Timer?
@@ -386,6 +437,9 @@ final class CompanionPanelController {
             } else {
                 unit = OtterUnitView(sessionID: id, focusTarget: focusTarget, labelText: labelText, labelWidth: labelWidth)
                 unit.menu = sharedMenu
+                unit.dragTarget = panel
+                unit.onDragStart = { [weak self] in self?.isDraggingRow = true }
+                unit.onDragEnd = { [weak self] in self?.finishRowDrag() }
                 contentView.addSubview(unit)
                 unitViews[id] = unit
             }
@@ -464,8 +518,28 @@ final class CompanionPanelController {
     /// fallback now nests the whole otter+label unit rather than just the
     /// otter.
     private func repositionToGhosttyWindow() {
+        guard !isDraggingRow else { return }
         guard let windowFrame = Self.frontmostGhosttyWindowFrame() else {
             panel.orderOut(nil)
+            return
+        }
+
+        // User-parked position: follow the window at the dragged offset,
+        // clamped to the screen -- anywhere is allowed, even over the
+        // terminal content; that's the user's call.
+        if let customOffset {
+            guard let screen = NSScreen.screens.first(where: { $0.frame.intersects(windowFrame) }) ?? NSScreen.main else {
+                return
+            }
+            let size = panel.frame.size
+            var origin = NSPoint(x: windowFrame.origin.x + customOffset.x, y: windowFrame.origin.y + customOffset.y)
+            let visible = screen.visibleFrame
+            origin.x = min(max(origin.x, visible.minX), max(visible.minX, visible.maxX - size.width))
+            origin.y = min(max(origin.y, visible.minY), max(visible.minY, visible.maxY - size.height))
+            panel.setFrame(NSRect(origin: origin, size: size), display: true)
+            if !isManuallyHidden {
+                panel.orderFrontRegardless()
+            }
             return
         }
         // Clamp against whichever screen actually contains the Ghostty
@@ -557,6 +631,30 @@ final class CompanionPanelController {
         return candidates.max(by: { $0.width * $0.height < $1.width * $1.height })
     }
 
+    // MARK: - Drag-to-park
+
+    private func finishRowDrag() {
+        isDraggingRow = false
+        guard let windowFrame = Self.frontmostGhosttyWindowFrame() else { return }
+        let offset = NSPoint(
+            x: panel.frame.origin.x - windowFrame.origin.x,
+            y: panel.frame.origin.y - windowFrame.origin.y
+        )
+        customOffset = offset
+        UserDefaults.standard.set(Double(offset.x), forKey: Self.offsetXPrefKey)
+        UserDefaults.standard.set(Double(offset.y), forKey: Self.offsetYPrefKey)
+    }
+
+    private static func loadOffset() -> NSPoint? {
+        let defaults = UserDefaults.standard
+        guard defaults.object(forKey: offsetXPrefKey) != nil,
+              defaults.object(forKey: offsetYPrefKey) != nil else { return nil }
+        return NSPoint(
+            x: CGFloat(defaults.double(forKey: offsetXPrefKey)),
+            y: CGFloat(defaults.double(forKey: offsetYPrefKey))
+        )
+    }
+
     // MARK: - Context menu (right-click kill switch)
 
     private func buildContextMenu() -> NSMenu {
@@ -565,6 +663,10 @@ final class CompanionPanelController {
         let hideItem = NSMenuItem(title: "Hide Companion", action: #selector(hideCompanionFromContextMenu), keyEquivalent: "")
         hideItem.target = self
         menu.addItem(hideItem)
+
+        let resetItem = NSMenuItem(title: "Reset Position", action: #selector(resetPositionFromContextMenu), keyEquivalent: "")
+        resetItem.target = self
+        menu.addItem(resetItem)
 
         menu.addItem(.separator())
 
@@ -577,6 +679,13 @@ final class CompanionPanelController {
 
     @objc private func hideCompanionFromContextMenu() {
         setManuallyHidden(true)
+    }
+
+    @objc private func resetPositionFromContextMenu() {
+        customOffset = nil
+        UserDefaults.standard.removeObject(forKey: Self.offsetXPrefKey)
+        UserDefaults.standard.removeObject(forKey: Self.offsetYPrefKey)
+        repositionToGhosttyWindow()
     }
 
     @objc private func quitApp() {
