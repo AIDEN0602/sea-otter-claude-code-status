@@ -50,6 +50,11 @@ struct Session: Codable {
     let lastEvent: String
     let errorCount: Int
     let outputs: [String]
+    /// Short excerpt of the most recent assistant reply (or the pending
+    /// permission prompt's message), written by the hook for the desktop
+    /// pet's hover bubble. Optional -- absent on session files written
+    /// before this field existed.
+    let lastSummary: String?
 
     enum CodingKeys: String, CodingKey {
         case sessionID = "session_id"
@@ -63,6 +68,7 @@ struct Session: Codable {
         case lastEvent = "last_event"
         case errorCount = "error_count"
         case outputs
+        case lastSummary = "last_summary"
     }
 
     init(from decoder: Decoder) throws {
@@ -84,6 +90,8 @@ struct Session: Codable {
         launchCwd = (decodedLaunchCwd?.isEmpty ?? true) ? nil : decodedLaunchCwd
         let decodedTty = (try? container.decode(String.self, forKey: .tty))
         tty = (decodedTty?.isEmpty ?? true) ? nil : decodedTty
+        let decodedSummary = (try? container.decode(String.self, forKey: .lastSummary))
+        lastSummary = (decodedSummary?.isEmpty ?? true) ? nil : decodedSummary
     }
 
     /// The cwd to use for Ghostty tab matching: `launch_cwd` when present,

@@ -7,6 +7,7 @@ import AppKit
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var notchPanelController: NotchPanelController!
     private var companionPanelController: CompanionPanelController!
+    private var desktopPetController: DesktopPetController!
     private var dropdownController: DropdownPanelController!
     private var statusBarController: StatusBarController!
 
@@ -19,10 +20,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         notchPanelController = NotchPanelController()
         companionPanelController = CompanionPanelController()
+        desktopPetController = DesktopPetController()
         dropdownController = DropdownPanelController()
         statusBarController = StatusBarController(
             notchPanelController: notchPanelController,
-            companionPanelController: companionPanelController
+            companionPanelController: companionPanelController,
+            desktopPetController: desktopPetController
         )
 
         // Only the notch otter toggles the shared dropdown; companion otters
@@ -78,6 +81,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let store = SessionStore.shared
         notchPanelController.update(store: store)
         companionPanelController.update(store: store)
+        desktopPetController.update(store: store)
         statusBarController.updateSummary(store.summaryText)
         dropdownController.refreshIfVisible(
             store: store,

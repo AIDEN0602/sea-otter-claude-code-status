@@ -219,7 +219,14 @@ final class OverflowChipView: NSView {
 final class CompanionPanelController {
     private static let rightMargin: CGFloat = 24
     private static let rowSpacing: CGFloat = 8
-    private static let maxOtters = 5
+    private static let maxOtters = 10
+    /// How far below the window's top edge the row sits when it has to nest
+    /// INSIDE the window (maximized / touching the menu bar): clears
+    /// Ghostty's title-bar-plus-tab-strip so the otters never cover the tabs
+    /// -- the panel swallows clicks, so covering the tab bar made tabs
+    /// unclickable. Generous on purpose: 44 still grazed the strip's hit
+    /// area on a maximized window.
+    private static let nestedTabBarOffset: CGFloat = 76
     private static let hiddenPrefKey = "NotchOtter.companionHidden"
     private static let ghosttyOwnerName = "Ghostty"
     private static let pollInterval: TimeInterval = 1.0
@@ -478,10 +485,10 @@ final class CompanionPanelController {
 
         // Clamp: if perching above the window would push the otters' tops
         // above the screen's visible area (window touches the menu bar /
-        // near-fullscreen), nest the whole unit INSIDE the window's
-        // top-right corner instead.
+        // near-fullscreen), nest the whole unit INSIDE the window -- but
+        // BELOW the title bar + tab strip, so the tabs stay clickable.
         if y + unitHeight > screen.frame.maxY {
-            y = windowFrame.maxY - unitHeight
+            y = windowFrame.maxY - unitHeight - Self.nestedTabBarOffset
         }
 
         // Keep the row horizontally within the window's own bounds.

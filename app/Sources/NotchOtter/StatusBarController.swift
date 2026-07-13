@@ -8,13 +8,20 @@ final class StatusBarController: NSObject, NSMenuDelegate {
     private let statusItem: NSStatusItem
     private weak var notchPanelController: NotchPanelController?
     private weak var companionPanelController: CompanionPanelController?
+    private weak var desktopPetController: DesktopPetController?
     private let launchAtLoginItem = NSMenuItem(title: "Launch at Login", action: nil, keyEquivalent: "")
     private let showHideItem = NSMenuItem(title: "Show/Hide Panel", action: nil, keyEquivalent: "")
     private let showHideCompanionItem = NSMenuItem(title: "Show/Hide Companion", action: nil, keyEquivalent: "")
+    private let showHideDesktopPetItem = NSMenuItem(title: "Show/Hide Desktop Pet", action: nil, keyEquivalent: "")
 
-    init(notchPanelController: NotchPanelController, companionPanelController: CompanionPanelController) {
+    init(
+        notchPanelController: NotchPanelController,
+        companionPanelController: CompanionPanelController,
+        desktopPetController: DesktopPetController
+    ) {
         self.notchPanelController = notchPanelController
         self.companionPanelController = companionPanelController
+        self.desktopPetController = desktopPetController
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         super.init()
         statusItem.button?.title = "\u{1F9A6}" // otter emoji as a stable fallback icon
@@ -39,6 +46,10 @@ final class StatusBarController: NSObject, NSMenuDelegate {
         showHideCompanionItem.action = #selector(toggleShowHideCompanion)
         menu.addItem(showHideCompanionItem)
 
+        showHideDesktopPetItem.target = self
+        showHideDesktopPetItem.action = #selector(toggleShowHideDesktopPet)
+        menu.addItem(showHideDesktopPetItem)
+
         launchAtLoginItem.target = self
         launchAtLoginItem.action = #selector(toggleLaunchAtLogin(_:))
         launchAtLoginItem.state = currentLaunchAtLoginState
@@ -58,6 +69,7 @@ final class StatusBarController: NSObject, NSMenuDelegate {
     func menuWillOpen(_ menu: NSMenu) {
         showHideItem.state = (notchPanelController?.isManuallyHidden ?? false) ? .off : .on
         showHideCompanionItem.state = (companionPanelController?.isManuallyHidden ?? false) ? .off : .on
+        showHideDesktopPetItem.state = (desktopPetController?.isManuallyHidden ?? false) ? .off : .on
     }
 
     @objc private func toggleShowHidePanel() {
@@ -66,6 +78,10 @@ final class StatusBarController: NSObject, NSMenuDelegate {
 
     @objc private func toggleShowHideCompanion() {
         companionPanelController?.toggleManualVisibility()
+    }
+
+    @objc private func toggleShowHideDesktopPet() {
+        desktopPetController?.toggleManualVisibility()
     }
 
     private var currentLaunchAtLoginState: NSControl.StateValue {

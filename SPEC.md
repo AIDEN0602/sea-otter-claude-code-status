@@ -19,7 +19,8 @@ One file per live Claude Code session: `<session_id>.json`
   "updated_at": "2026-07-05T14:03:22Z",
   "last_event": "PreToolUse",
   "error_count": 0,
-  "outputs": ["/abs/path/file1.py", "/abs/path/report.html"]
+  "outputs": ["/abs/path/file1.py", "/abs/path/report.html"],
+  "last_summary": "Fixed the build; tests pass. Next up: wiring the panel."
 }
 ```
 
@@ -29,6 +30,7 @@ Rules:
 - `launch_cwd` (string) = the `cwd` from the FIRST event that creates the state file, captured once and never overwritten afterward. `cwd` itself keeps updating on every event (Claude's internal `cd` changes it), but the Ghostty tab that launched the session keeps reporting the original launch directory, so the app needs `launch_cwd` for tab matching.
 - `tty` (string, optional) = the claude process's controlling tty (e.g. `"ttys014"`), captured once via `ps -o tty= -p $PPID` the same way `pid` is backfilled: only re-attempted while the state file lacks a non-empty `tty`, so it's at most one extra `ps` call per session lifetime, not per event. A `"??"` (no controlling tty) result is stored as empty/absent so the app can treat it as unknown.
 - `outputs` = deduplicated absolute paths from PostToolUse Write/Edit events, append-only, max 200.
+- `last_summary` (string, optional) = short single-line excerpt (max 200 codepoints) of the most recent assistant reply, refreshed on every event that carries a `transcript_path`: the last `type=="assistant"` line WITH text blocks within the transcript's final 60 lines (tool-use-only entries are skipped), cleaned of code fences / markdown glyphs / link syntax, whitespace collapsed. Replies longer than 200 codepoints are condensed to "first sentence … last sentence" (outcome + next step) rather than cut mid-word. Notification events with a non-empty `message` use that message instead (it names the pending tool for permission prompts). Truncation is codepoint-based in jq — never byte-based (`cut -c`), which could split a UTF-8 sequence and corrupt the file. Shown in the desktop pet's hover bubble. `engine/backfill_summaries.sh` injects it once into state files that predate the field (sessions idle since before hook install would otherwise show an empty bubble until their next event).
 - `state` transitions (hook → state):
   - SessionStart → `idle`
   - UserPromptSubmit, PreToolUse, PostToolUse → `working`

@@ -41,6 +41,49 @@ fi
 # process itself (per SPEC.md: "hook runs as child of claude").
 ppid_val="${PPID:-0}"
 
+# last_summary: a short single-line excerpt of the most recent assistant
+# reply, shown in the desktop pet's hover bubble. Prefer the Notification
+# payload's own message (it names the pending tool for permission prompts);
+# otherwise pull the last assistant text block from the transcript tail.
+# Truncation happens in jq (codepoint-safe for Korean), NOT via cut -c
+# (bytes), which could split a UTF-8 sequence and corrupt the state file.
+summary=$(printf '%s' "$hook_json" | "$JQ_BIN" -r '
+  if (.hook_event_name // "") == "Notification" and ((.message // "") != "")
+  then .message else empty end
+  | gsub("\\s+"; " ") | .[0:160]
+' 2>/dev/null)
+if [ -z "$summary" ]; then
+  transcript_path=$(printf '%s' "$hook_json" | "$JQ_BIN" -r '.transcript_path // empty' 2>/dev/null)
+  if [ -n "$transcript_path" ] && [ -f "$transcript_path" ]; then
+    # Last assistant entry that actually HAS text -- during tool-call bursts
+    # the newest assistant entries are often tool_use-only (no text blocks),
+    # and those must not blank out the summary. The text is then cleaned
+    # (code fences, markdown glyphs, links) and condensed: replies lead with
+    # the outcome and end with the next step / question, so when the whole
+    # reply doesn't fit, "first sentence … last sentence" beats a mid-word
+    # cut at some fixed offset.
+    summary=$(tail -n 60 "$transcript_path" 2>/dev/null | "$JQ_BIN" -rRs '
+      split("\n")
+      | map(fromjson? | select(.type == "assistant"))
+      | map([.message.content[]? | select(.type == "text") | .text] | join(" "))
+      | map(select(. != ""))
+      | last // empty
+      | gsub("```[\\s\\S]*?```"; " ")
+      | gsub("\\[(?<t>[^\\]]*)\\]\\([^)]*\\)"; "\(.t)")
+      | gsub("[*_#`~]"; "")
+      | gsub("\\s+"; " ")
+      | gsub("^\\s+|\\s+$"; "")
+      | . as $t
+      | [scan("[^.!?]+[.!?]*")] as $s
+      | (if ($t | length) <= 200 then $t
+         elif ($s | length) >= 2 then
+           (($s[0] | gsub("^\\s+|\\s+$"; "")) + " … " + ($s[-1] | gsub("^\\s+|\\s+$"; "")))
+         else $t end)
+      | .[0:200]
+    ' 2>/dev/null)
+  fi
+fi
+
 # tty is backfilled once per session, same as pid: only shell out to ps when
 # the existing state file doesn't already have a non-empty tty, so the
 # (relatively expensive) ps call happens at most once per session lifetime.
@@ -57,6 +100,7 @@ merged=$(printf '%s' "$hook_json" | "$JQ_BIN" -c \
   --argjson existing "$existing_json" \
   --arg pid "$ppid_val" \
   --arg new_tty "$new_tty" \
+  --arg summary "$summary" \
   '
   . as $in
   | ($in.hook_event_name // "") as $event
@@ -123,6 +167,7 @@ merged=$(printf '%s' "$hook_json" | "$JQ_BIN" -c \
           pid: (if (($existing.pid // 0) | tonumber? // 0) > 0 then $existing.pid else (($pid | tonumber?) // 0) end),
           launch_cwd: $launch_cwd }
       * (if $tty_final != "" then { tty: $tty_final } else {} end)
+      * (if $summary != "" then { last_summary: $summary } else {} end)
       * $delta
     )
   ' 2>/dev/null)
