@@ -13,6 +13,8 @@ final class StatusBarController: NSObject, NSMenuDelegate {
     private let showHideItem = NSMenuItem(title: "Show/Hide Panel", action: nil, keyEquivalent: "")
     private let showHideCompanionItem = NSMenuItem(title: "Show/Hide Companion", action: nil, keyEquivalent: "")
     private let showHideDesktopPetItem = NSMenuItem(title: "Show/Hide Desktop Pet", action: nil, keyEquivalent: "")
+    private let characterItem = NSMenuItem(title: "Character", action: nil, keyEquivalent: "")
+    private let characterMenu = NSMenu(title: "Character")
 
     init(
         notchPanelController: NotchPanelController,
@@ -50,6 +52,9 @@ final class StatusBarController: NSObject, NSMenuDelegate {
         showHideDesktopPetItem.action = #selector(toggleShowHideDesktopPet)
         menu.addItem(showHideDesktopPetItem)
 
+        characterItem.submenu = characterMenu
+        menu.addItem(characterItem)
+
         launchAtLoginItem.target = self
         launchAtLoginItem.action = #selector(toggleLaunchAtLogin(_:))
         launchAtLoginItem.state = currentLaunchAtLoginState
@@ -65,11 +70,52 @@ final class StatusBarController: NSObject, NSMenuDelegate {
     }
 
     /// Keeps both checkmarks in sync even when visibility changed elsewhere
-    /// (e.g. the otter's own right-click "Hide Otter"/"Hide Companion" items).
+    /// (e.g. the otter's own right-click "Hide Otter"/"Hide Companion" items),
+    /// and rebuilds the Character submenu so packs dropped into the sprites
+    /// folder appear without relaunching.
     func menuWillOpen(_ menu: NSMenu) {
         showHideItem.state = (notchPanelController?.isManuallyHidden ?? false) ? .off : .on
         showHideCompanionItem.state = (companionPanelController?.isManuallyHidden ?? false) ? .off : .on
         showHideDesktopPetItem.state = (desktopPetController?.isManuallyHidden ?? false) ? .off : .on
+        rebuildCharacterMenu()
+    }
+
+    // MARK: - Character packs
+
+    private func rebuildCharacterMenu() {
+        characterMenu.removeAllItems()
+        let selected = SpritePacks.selected
+
+        let builtIn = NSMenuItem(title: "Otter (built-in)", action: #selector(selectCharacter(_:)), keyEquivalent: "")
+        builtIn.target = self
+        builtIn.representedObject = nil
+        builtIn.state = selected == nil ? .on : .off
+        characterMenu.addItem(builtIn)
+
+        let packs = SpritePacks.availablePacks()
+        if !packs.isEmpty {
+            characterMenu.addItem(.separator())
+            for pack in packs {
+                let item = NSMenuItem(title: pack, action: #selector(selectCharacter(_:)), keyEquivalent: "")
+                item.target = self
+                item.representedObject = pack
+                item.state = selected == pack ? .on : .off
+                characterMenu.addItem(item)
+            }
+        }
+
+        characterMenu.addItem(.separator())
+        let openItem = NSMenuItem(title: "Open Sprite Packs Folder\u{2026}", action: #selector(openPacksFolder), keyEquivalent: "")
+        openItem.target = self
+        characterMenu.addItem(openItem)
+    }
+
+    @objc private func selectCharacter(_ sender: NSMenuItem) {
+        SpritePacks.select(sender.representedObject as? String)
+    }
+
+    @objc private func openPacksFolder() {
+        NSWorkspace.shared.open(SpritePacks.ensurePacksDirectory())
     }
 
     @objc private func toggleShowHidePanel() {

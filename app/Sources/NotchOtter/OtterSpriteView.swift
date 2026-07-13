@@ -21,6 +21,7 @@ final class OtterSpriteView: NSView {
     private var frameIndex = 0
     private var timer: Timer?
     private var loadedState: SessionState?
+    private var packObserver: NSObjectProtocol?
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -29,6 +30,18 @@ final class OtterSpriteView: NSView {
         imageLayer.contentsGravity = .resizeAspect
         imageLayer.actions = ["contents": NSNull()] // disable implicit fade between frames
         layer?.addSublayer(imageLayer)
+
+        // Live character swap: when the user picks a different sprite pack,
+        // re-load the currently-shown state from the new pack in place.
+        packObserver = NotificationCenter.default.addObserver(
+            forName: .spritePackDidChange,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            guard let self, let current = self.loadedState else { return }
+            self.loadedState = nil
+            self.setState(current)
+        }
     }
 
     required init?(coder: NSCoder) {
@@ -71,11 +84,8 @@ final class OtterSpriteView: NSView {
     }
 
     private static func loadFrames(for state: SessionState) -> [CGImage] {
-        guard let url = Bundle.main.url(
-            forResource: state.rawValue,
-            withExtension: "png",
-            subdirectory: "sprites"
-        ), let image = NSImage(contentsOf: url) else {
+        guard let url = SpritePacks.sheetURL(for: state),
+              let image = NSImage(contentsOf: url) else {
             return []
         }
 
@@ -104,5 +114,8 @@ final class OtterSpriteView: NSView {
 
     deinit {
         timer?.invalidate()
+        if let packObserver {
+            NotificationCenter.default.removeObserver(packObserver)
+        }
     }
 }
