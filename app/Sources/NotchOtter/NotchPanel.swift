@@ -103,9 +103,10 @@ final class NotchPanelController {
 
         spriteView.setState(state)
 
-        let badge = Self.compactBadge(for: store)
-        badgeLabel.attributedStringValue = badge ?? NSAttributedString(string: "")
-        badgeLabel.isHidden = badge == nil
+        // Otter only — session counts are visible elsewhere (per-tab pets),
+        // so the notch tab stays clean with no text badge.
+        badgeLabel.attributedStringValue = NSAttributedString(string: "")
+        badgeLabel.isHidden = true
 
         layoutContent()
         reposition()
