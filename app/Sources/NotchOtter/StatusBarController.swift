@@ -30,10 +30,11 @@ final class StatusBarController: NSObject, NSMenuDelegate {
         statusItem.menu = buildMenu()
     }
 
-    /// Mirrors `SessionStore.summaryText` onto the menu bar button.
+    /// The menu bar shows only the otter icon — session counts are visible
+    /// in the notch/companion pets, so no text is appended here.
     func updateSummary(_ text: String) {
         guard let button = statusItem.button else { return }
-        button.title = text.isEmpty ? "\u{1F9A6}" : "\u{1F9A6} \(text)"
+        button.title = "\u{1F9A6}"
     }
 
     private func buildMenu() -> NSMenu {

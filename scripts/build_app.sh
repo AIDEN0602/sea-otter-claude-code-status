@@ -37,6 +37,21 @@ else
   exit 1
 fi
 
+echo "==> Building app icon"
+ICON_SRC="$REPO_ROOT/assets/icon/AppIcon.png"
+if [ ! -f "$ICON_SRC" ]; then
+  swift "$REPO_ROOT/scripts/gen-icon.swift" "$SPRITES_SRC/idle.png" "$ICON_SRC"
+fi
+ICONSET="$DIST_DIR/AppIcon.iconset"
+rm -rf "$ICONSET"; mkdir -p "$ICONSET"
+for s in 16 32 128 256 512; do
+  sips -z "$s" "$s" "$ICON_SRC" --out "$ICONSET/icon_${s}x${s}.png" >/dev/null
+  d=$((s * 2))
+  sips -z "$d" "$d" "$ICON_SRC" --out "$ICONSET/icon_${s}x${s}@2x.png" >/dev/null
+done
+iconutil -c icns "$ICONSET" -o "$APP_BUNDLE/Contents/Resources/AppIcon.icns"
+rm -rf "$ICONSET"
+
 cat > "$APP_BUNDLE/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -56,6 +71,8 @@ cat > "$APP_BUNDLE/Contents/Info.plist" <<PLIST
     <string>APPL</string>
     <key>CFBundleExecutable</key>
     <string>NotchOtter</string>
+    <key>CFBundleIconFile</key>
+    <string>AppIcon</string>
     <key>CFBundleInfoDictionaryVersion</key>
     <string>6.0</string>
     <key>LSMinimumSystemVersion</key>
@@ -78,4 +95,10 @@ codesign -s - --force --deep "$APP_BUNDLE"
 echo "==> Verifying signature"
 codesign -v "$APP_BUNDLE"
 
-echo "==> Done: $APP_BUNDLE"
+echo "==> Installing to /Applications"
+osascript -e 'quit app "NotchOtter"' 2>/dev/null || true
+sleep 1
+rm -rf "/Applications/NotchOtter.app"
+cp -R "$APP_BUNDLE" "/Applications/NotchOtter.app"
+
+echo "==> Done: /Applications/NotchOtter.app"
