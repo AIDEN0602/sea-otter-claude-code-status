@@ -540,9 +540,9 @@ final class DesktopPetController {
             let cwd = record.session.cwd
             unit.onClick = {
                 if let tab = matchedTab {
-                    GhosttyFocus.focusTab(windowIndex: tab.windowIndex, tabIndex: tab.tabIndex)
+                    TerminalFocusDispatcher.focusTab(windowIndex: tab.windowIndex, tabIndex: tab.tabIndex, cwd: cwd)
                 } else {
-                    GhosttyFocus.focus(cwd: cwd)
+                    TerminalFocusDispatcher.focus(cwd: cwd)
                 }
             }
             let statusLine = "\(statusText(for: record.displayState)) \u{00B7} \(record.session.project) \u{00B7} \(ageText(record.ageSeconds))"

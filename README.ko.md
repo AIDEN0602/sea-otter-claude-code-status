@@ -61,9 +61,15 @@ open dist/NotchOtter.app
 python3 spritegen/hatch.py 사진경로.jpg --name 우리강아지
 ```
 
-그다음 메뉴바 → **Character**에서 선택하면 세 화면 모두 즉시
+그다음 메뉴바 → **Preferences…**에서 선택하면 세 화면 모두 즉시
 바뀝니다. 팩은 `~/.local/share/notch-otter/sprites/`에 저장되고,
 폴더를 지우면 제거됩니다.
+
+같은 Preferences 창에서 세션 아이콘 클릭 시 어떤 터미널 앱을
+포커스할지도 선택할 수 있습니다 (Ghostty·iTerm2·Terminal.app 중
+설치된 것을 자동 감지). 탭 단위 정확한 포커스는 Ghostty에서만
+가능하고, iTerm2·Terminal은 작업 디렉토리 기준의 최선 노력형
+창 포커스를 사용합니다.
 
 ## 자주 묻는 질문
 

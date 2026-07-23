@@ -123,7 +123,7 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
     ) {
         if let sessionID = response.notification.request.content.userInfo["session_id"] as? String,
            let record = SessionStore.shared.record(forSessionID: sessionID) {
-            GhosttyFocus.focus(cwd: record.session.cwd)
+            TerminalFocusDispatcher.focus(cwd: record.session.cwd)
         }
         completionHandler()
     }

@@ -62,9 +62,15 @@ Turn any photo into a pixel-art character with animations and state badges:
 python3 spritegen/hatch.py path/to/photo.jpg --name mypet
 ```
 
-Then pick it from the menu bar → **Character**. It applies instantly to
+Then pick it from the menu bar → **Preferences…**. It applies instantly to
 all three surfaces. Packs live in `~/.local/share/notch-otter/sprites/`;
 delete a folder to remove one.
+
+The same Preferences window also lets you choose which terminal app
+NotchOtter focuses when you click a session's otter (Ghostty, iTerm2, or
+Terminal.app, auto-detected). Exact-tab focus is only available for
+Ghostty; iTerm2 and Terminal use best-effort window focus by working
+directory.
 
 ## FAQ
 

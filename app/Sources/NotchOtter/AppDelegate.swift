@@ -108,7 +108,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func focusSession(_ record: SessionRecord) {
-        GhosttyFocus.focus(cwd: record.session.cwd)
+        TerminalFocusDispatcher.focus(cwd: record.session.cwd)
     }
 
     /// Reveals a session's output files in Finder. Prefers revealing the

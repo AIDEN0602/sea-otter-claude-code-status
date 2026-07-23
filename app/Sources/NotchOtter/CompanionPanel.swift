@@ -37,8 +37,10 @@ final class OtterUnitView: NSView {
     enum FocusTarget: Equatable {
         /// Matched to a specific Ghostty tab -- focus by exact identity,
         /// since cwd-matching alone is ambiguous when multiple tabs share a
-        /// working directory.
-        case tab(windowIndex: Int, tabIndex: Int)
+        /// working directory. `cwd` rides along too: if the user's selected
+        /// terminal (see TerminalPreference) isn't Ghostty, exact-tab focus
+        /// doesn't apply and TerminalFocusDispatcher falls back to it.
+        case tab(windowIndex: Int, tabIndex: Int, cwd: String)
         /// Unmatched (headless run, different terminal, or tab data
         /// unavailable) -- fall back to the existing cwd-based focus.
         case cwd(String)
@@ -163,10 +165,10 @@ final class OtterUnitView: NSView {
             return
         }
         switch focusTarget {
-        case let .tab(windowIndex, tabIndex):
-            GhosttyFocus.focusTab(windowIndex: windowIndex, tabIndex: tabIndex)
+        case let .tab(windowIndex, tabIndex, cwd):
+            TerminalFocusDispatcher.focusTab(windowIndex: windowIndex, tabIndex: tabIndex, cwd: cwd)
         case let .cwd(cwd):
-            GhosttyFocus.focus(cwd: cwd)
+            TerminalFocusDispatcher.focus(cwd: cwd)
         }
     }
 
@@ -420,7 +422,7 @@ final class CompanionPanelController {
             let labelText: String
             let labelWidth: CGFloat
             if let tab = row.matchedTab {
-                focusTarget = .tab(windowIndex: tab.windowIndex, tabIndex: tab.tabIndex)
+                focusTarget = .tab(windowIndex: tab.windowIndex, tabIndex: tab.tabIndex, cwd: record.session.cwd)
                 labelText = OtterUnitView.stripLeadingGlyphs(tab.title)
                 labelWidth = OtterUnitView.matchedLabelWidth
             } else {

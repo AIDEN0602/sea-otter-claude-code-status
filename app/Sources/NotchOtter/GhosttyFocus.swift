@@ -15,7 +15,7 @@ import AppKit
 /// 4. Fall back to plain `activate` of Ghostty.
 ///
 /// All failures are swallowed per SPEC: a beep, never a crash.
-enum GhosttyFocus {
+enum GhosttyFocus: TerminalFocuser {
     static func focus(cwd: String) {
         DispatchQueue.global(qos: .userInitiated).async {
             let success = runFocusScript(cwd: cwd)

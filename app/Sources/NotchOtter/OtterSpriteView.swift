@@ -83,6 +83,16 @@ final class OtterSpriteView: NSView {
         imageLayer.contents = frames[frameIndex]
     }
 
+    /// First frame of the currently-selected sprite pack's sheet for
+    /// `state`, as a static (non-animated) image -- used for the Preferences
+    /// window's character-pack preview, which doesn't need a full animated
+    /// OtterSpriteView. Reuses the same slicing logic as the live animation
+    /// loader, just without the timer.
+    static func previewImage(for state: SessionState) -> NSImage? {
+        guard let cgImage = loadFrames(for: state).first else { return nil }
+        return NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
+    }
+
     private static func loadFrames(for state: SessionState) -> [CGImage] {
         guard let url = SpritePacks.sheetURL(for: state),
               let image = NSImage(contentsOf: url) else {
