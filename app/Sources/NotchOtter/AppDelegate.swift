@@ -9,7 +9,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var companionPanelController: CompanionPanelController!
     private var desktopPetController: DesktopPetController!
     private var dropdownController: DropdownPanelController!
-    private var statusBarController: StatusBarController!
+    private var statusBarController: StatusBarController?
 
     private var storeObserver: NSObjectProtocol?
     private var tabsPollObserver: NSObjectProtocol?
@@ -22,11 +22,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         companionPanelController = CompanionPanelController()
         desktopPetController = DesktopPetController()
         dropdownController = DropdownPanelController()
-        statusBarController = StatusBarController(
-            notchPanelController: notchPanelController,
-            companionPanelController: companionPanelController,
-            desktopPetController: desktopPetController
-        )
+        // Pass `--no-menubar` to run without a menu bar item — handy if you
+        // only want the otter in the notch and desktop pet and prefer to
+        // keep the menu bar uncluttered. Default keeps the menu bar item.
+        if !CommandLine.arguments.contains("--no-menubar") {
+            statusBarController = StatusBarController(
+                notchPanelController: notchPanelController,
+                companionPanelController: companionPanelController,
+                desktopPetController: desktopPetController
+            )
+        }
 
         // Only the notch otter toggles the shared dropdown; companion otters
         // left-click straight to focusing their own session's Ghostty tab
@@ -82,7 +87,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         notchPanelController.update(store: store)
         companionPanelController.update(store: store)
         desktopPetController.update(store: store)
-        statusBarController.updateSummary(store.summaryText)
+        statusBarController?.updateSummary(store.summaryText)
         dropdownController.refreshIfVisible(
             store: store,
             onRowClick: { [weak self] record in self?.focusSession(record) },
