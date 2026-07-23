@@ -38,18 +38,35 @@ The otter's animation always shows the most urgent state:
 
 ## Install
 
-Requires macOS 13+, Claude Code, and the Swift toolchain (Command Line
-Tools). Ghostty ≥ 1.3 is optional — without it you lose only tab-jumping
-and tab-order labels.
+Requires macOS 13+, Claude Code, and Xcode Command Line Tools. Ghostty ≥ 1.3
+is optional — without it you lose only tab-jumping and tab-order labels.
+
+Copy-paste this whole block into Terminal:
 
 ```bash
-bash engine/install.sh        # register hooks (backs up your settings first)
-bash scripts/build_app.sh     # build dist/NotchOtter.app
-open dist/NotchOtter.app
+# 0. One-time: install build tools if you don't have them
+xcode-select --install 2>/dev/null
+
+# 1. Download
+git clone https://github.com/AIDEN0602/sea-otter-claude-code-status.git
+cd sea-otter-claude-code-status
+
+# 2. Register the Claude Code hooks (backs up your settings first)
+bash engine/install.sh
+
+# 3. Build and install the app into /Applications
+bash scripts/build_app.sh
+open "/Applications/NotchOtter.app"
 ```
 
-macOS will ask once for Notifications, and once for Automation (to focus
-Ghostty tabs). Enable "Launch at Login" from the menu bar item.
+That's it — the otter appears next to your menu bar / notch.
+
+**First launch:** the app is self-signed, so macOS may say it's from an
+"unidentified developer." Right-click `NotchOtter.app` in Applications →
+**Open** → **Open** once, and it will run normally from then on.
+
+macOS will also ask once for Notifications, and once for Automation (to
+focus terminal tabs). Enable "Launch at Login" from the menu bar item.
 
 To uninstall: `bash engine/uninstall.sh` (removes only NotchOtter's hooks),
 then delete the app.
